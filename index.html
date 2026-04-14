@@ -475,7 +475,7 @@ function render() {
     const wallX=(fracX<0.022||fracX>0.978)?fracY:fracX;
     ctx.drawImage(wallTex(cell),Math.floor(wallX*64),0,1,64,sx,st,sw,sh);
     if(cell===2||cell===3||cell===5){
-      hits.push({sx,sw,st,sh,cd,wallX,rx,ry,mapRow:Math.floor(ry),cell,ri:i});
+      hits.push({sx,sw,st,sh,cd,wallX,rx,ry,mapRow:Math.floor(ry),cell,ri:i,ang});
     }
     ctx.fillStyle=`rgba(0,0,0,${Math.min(0.9,cd/7)})`;
     ctx.fillRect(sx,st,sw,sh);
@@ -500,12 +500,12 @@ function render() {
     for(let gi=0;gi<NG;gi++){
       const key=`${shelfId}:${gi}:${boxIdx}`;
       if(!runs.has(key)){
-        runs.set(key,{minX:h.sx,maxX:h.sx+h.sw,st:h.st,sh:h.sh,cd:h.cd,gi,shelfId,boxIdx,ri:h.ri});
+        runs.set(key,{minX:h.sx,maxX:h.sx+h.sw,st:h.st,sh:h.sh,cd:h.cd,gi,shelfId,boxIdx,ri:h.ri,ang:h.ang});
       } else {
         const r=runs.get(key);
         r.minX=Math.min(r.minX,h.sx);
         r.maxX=Math.max(r.maxX,h.sx+h.sw);
-        if(h.sh>r.sh){r.st=h.st;r.sh=h.sh;r.cd=h.cd;}
+        if(h.sh>r.sh){r.st=h.st;r.sh=h.sh;r.cd=h.cd;r.ang=h.ang;}
       }
     }
   }
@@ -516,32 +516,55 @@ function render() {
     const movie=SHELF_MAP.get(key);
     if(!movie)continue;
 
+    // ── Angle-based foreshortening ─────────────────────
+    // Shelf faces run east-west (along X axis), so their normal is [0, ±1].
+    // The dot product of the ray direction with the shelf normal tells us
+    // how "face-on" we are. When looking straight at the shelf (dot=1) we
+    // see full cover width. At an angle the cover compresses toward a spine.
+    //
+    // shelf normal: cell faces south (row increases going south), normal = (0,-1)
+    // ray direction: (cos(ang), sin(ang))
+    // dot = |sin(ang)| — 1.0 when looking straight at shelf, 0 when parallel
+    const faceDot = Math.abs(Math.sin(r.ang));  // 0..1, 1 = face-on
+    // Clamp so we never go fully invisible — at very shallow angles show spine
+    const faceAmount = Math.max(0.08, faceDot);
+
     // Row geometry — NG rows stacked on shelf face
     const rowFrac = 1/NG;
     const rowH    = r.sh*rowFrac;
     const rowTop  = r.st+r.sh*r.gi*rowFrac;
 
-    // Box size — portrait, gap on right
-    const gapPx = Math.max(1,Math.round(bw*0.06));
-    const boxW  = Math.max(2, bw-gapPx);
-    const boxH  = Math.min(rowH*0.88, boxW/0.68); // portrait ratio, fits in row
-    const boxTop= rowTop+(rowH-boxH)*0.5;          // vertically centered
+    // Box width is the raw run width × foreshortening factor
+    const gapPx    = Math.max(1, Math.round(bw*0.06));
+    const rawBoxW  = Math.max(2, bw - gapPx);
+    const boxW     = Math.max(1, Math.round(rawBoxW * faceAmount));
+    const boxH     = Math.min(rowH*0.88, rawBoxW/0.68); // portrait based on full width
+    const boxTop   = rowTop+(rowH-boxH)*0.5;
 
-    if(r.cd<=DIST_POSTER){
-      requestPosterLoad(movie.imgSm);
-      ctx.drawImage(getBoxCanvas(movie,boxW,boxH),r.minX,boxTop,boxW,boxH);
-    } else if(r.cd<=DIST_DETAIL){
-      ctx.drawImage(getBoxCanvas(movie,boxW,boxH),r.minX,boxTop,boxW,boxH);
+    // When nearly face-on: show cover art
+    // When angled: show increasingly dark spine
+    if(faceAmount > 0.35){
+      if(r.cd<=DIST_POSTER){
+        requestPosterLoad(movie.imgSm);
+        ctx.drawImage(getBoxCanvas(movie,boxW,boxH),r.minX,boxTop,boxW,boxH);
+      } else if(r.cd<=DIST_DETAIL){
+        ctx.drawImage(getBoxCanvas(movie,boxW,boxH),r.minX,boxTop,boxW,boxH);
+      } else {
+        ctx.fillStyle=`hsl(${movie.hue},40%,18%)`;
+        ctx.fillRect(r.minX,boxTop,boxW,boxH);
+        ctx.fillStyle=`hsl(${movie.hue},40%,34%)`;
+        ctx.fillRect(r.minX,boxTop,boxW,Math.max(1,boxH*0.06));
+      }
+      // Side darkening at angles — the more angled, the darker the face
+      if(faceAmount < 0.85){
+        ctx.fillStyle=`rgba(0,0,0,${(1-faceAmount)*0.6})`;
+        ctx.fillRect(r.minX,boxTop,boxW,boxH);
+      }
     } else {
-      // Far LOD — fast flat rect with 3D hint
-      ctx.fillStyle=`hsl(${movie.hue},40%,18%)`;
+      // Shallow angle — just show spine (dark with hint of color)
+      const spineLight = faceAmount / 0.35; // 0..1
+      ctx.fillStyle=`hsl(${movie.hue},30%,${Math.round(8+spineLight*10)}%)`;
       ctx.fillRect(r.minX,boxTop,boxW,boxH);
-      // Top highlight
-      ctx.fillStyle=`hsl(${movie.hue},40%,34%)`;
-      ctx.fillRect(r.minX,boxTop,boxW,Math.max(1,boxH*0.06));
-      // Left spine shadow
-      ctx.fillStyle='rgba(0,0,0,0.5)';
-      ctx.fillRect(r.minX,boxTop,Math.max(1,boxW*0.1),boxH);
     }
 
     // Shelf board at bottom of this row
