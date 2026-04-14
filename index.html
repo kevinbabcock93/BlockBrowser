@@ -152,10 +152,10 @@ const GENRES = [
   { label:'SCI-FI',       color:'#cc2288', lt:'genre',       gid:878  },
 ];
 const NG    = GENRES.length; // 6 genre rows per shelf
-const SLOTS = 18;            // boxes per row — more = narrower spines = more realistic
+const SLOTS = 13;            // exactly 13 usable shelf columns (map cellX 1..13), one movie each
 
-// MOVIES[gi][slot] = one unique movie object, never shared
-const MOVIES = GENRES.map(() => new Array(SLOTS).fill(null));
+// MOVIES[genreIdx][cellX-1] — permanently assigned to a world position, never duplicated
+const MOVIES = GENRES.map(() => new Array(13).fill(null));
 
 // Poster image objects — loaded lazily based on distance
 // imgCache[url] = { img: HTMLImageElement, loaded: bool }
@@ -192,9 +192,9 @@ async function fetchGenre(g, idx) {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
 
-  // Take exactly SLOTS unique results — no duplicates within or across rows
-  // We slice from the full result set; each genre gets its own fresh batch
-  const results = (data.results || []).slice(0, SLOTS);
+  // Map has 13 usable shelf columns (cellX 1..13), so we need 13 unique movies per genre.
+  // TMDB returns 20 per page — take first 13, guaranteed unique within the genre.
+  const results = (data.results || []).slice(0, 13);
   results.forEach((m, slot) => {
     MOVIES[idx][slot] = {
       id:         m.id,
@@ -206,10 +206,8 @@ async function fetchGenre(g, idx) {
       desc:       m.overview ? (m.overview.slice(0, 200) + (m.overview.length > 200 ? '…' : '')) : ' ',
       imgSm:      m.poster_path ? (IMG_SM + m.poster_path) : null,
       imgLg:      m.poster_path ? (IMG_LG + m.poster_path) : null,
-      // Pre-compute a stable color swatch from movie id for LOD fallback
       swatchHue:  (m.id * 53) % 360,
     };
-    // Register in cache but don't load yet
     if (MOVIES[idx][slot].imgSm) getOrCreateImg(MOVIES[idx][slot].imgSm);
   });
 }
@@ -450,15 +448,21 @@ function render() {
   }
 
   // ── VHS Spine Pass ─────────────────────────────────
+  // Key each box to its WORLD map cell X coordinate + genre row.
+  // This means each physical shelf position has exactly one movie, always.
+  // Map is MW=15 wide, shelf cells go from x=1 to x=13 (13 usable columns).
+  // We assign movie[gi][mapCellX - 1] — one unique movie per cell per genre.
   const runs = new Map();
   const csx  = Math.floor((RAYS / 2) * W / RAYS);
 
   for (const h of hits) {
-    const slot = Math.min(SLOTS - 1, Math.floor(h.wallX * SLOTS));
+    // Use the actual map cell X the ray hit — this is the world position
+    const cellX = Math.floor(h.rx);
+    // wallX within that cell (0..1) tells us left vs right half for depth shadow only
     for (let gi = 0; gi < NG; gi++) {
-      const key = `${gi}:${slot}:${Math.floor(h.rx * 2)}:${Math.floor(h.ry * 2)}`;
+      const key = `${gi}:${cellX}:${Math.floor(h.ry)}`;
       if (!runs.has(key)) {
-        runs.set(key, { minX: h.sx, maxX: h.sx + h.sw, st: h.st, sh: h.sh, cd: h.cd, gi, slot, ri: h.ri });
+        runs.set(key, { minX: h.sx, maxX: h.sx + h.sw, st: h.st, sh: h.sh, cd: h.cd, gi, cellX, ri: h.ri });
       } else {
         const r = runs.get(key);
         r.minX = Math.min(r.minX, h.sx);
@@ -471,7 +475,11 @@ function render() {
   for (const [, r] of runs) {
     const bw = r.maxX - r.minX;
     if (bw < 1) continue;
-    const movie = MOVIES[r.gi]?.[r.slot];
+
+    // Map cellX (1..13) → movie slot index (0..12)
+    // Each physical shelf column = one unique movie
+    const slot = Math.max(0, Math.min(MOVIES[r.gi].length - 1, r.cellX - 1));
+    const movie = MOVIES[r.gi]?.[slot];
     if (!movie) continue;
 
     // ── VHS BOX GEOMETRY ──────────────────────────────
