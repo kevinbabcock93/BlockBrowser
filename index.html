@@ -2,143 +2,6 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BlockBrowser — Data Baker</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;600&display=swap');
-  *{margin:0;padding:0;box-sizing:border-box;}
-  body{background:#0a0a12;color:#fff;font-family:'Barlow',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;}
-  h1{font-family:'Bebas Neue',cursive;font-size:48px;letter-spacing:4px;color:#FFD700;margin-bottom:4px;}
-  h1 span{color:#1565C0;}
-  .sub{color:rgba(255,255,255,0.45);font-size:14px;letter-spacing:2px;margin-bottom:40px;}
-  .card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:28px 32px;width:100%;max-width:540px;}
-  .card h2{font-family:'Bebas Neue',cursive;font-size:22px;letter-spacing:2px;color:#FFD700;margin-bottom:12px;}
-  .card p{font-size:13px;color:rgba(255,255,255,0.6);line-height:1.6;margin-bottom:18px;}
-  label{display:block;font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;}
-  input{width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:5px;padding:10px 12px;color:#fff;font-size:14px;margin-bottom:18px;}
-  input:focus{outline:none;border-color:#FFD700;}
-  .btn{width:100%;background:#FFD700;color:#111;border:none;font-family:'Bebas Neue',cursive;font-size:22px;letter-spacing:3px;padding:13px;border-radius:5px;cursor:pointer;}
-  .btn:hover{background:#ffe84d;}
-  .btn:disabled{background:#666;cursor:not-allowed;}
-  #progress{margin-top:20px;display:none;}
-  .prog-bar-wrap{height:6px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden;margin-bottom:10px;}
-  .prog-bar{height:100%;width:0%;background:#FFD700;border-radius:3px;transition:width 0.3s;}
-  .prog-status{font-size:12px;color:rgba(255,255,255,0.5);letter-spacing:1px;}
-  #done{display:none;margin-top:20px;text-align:center;}
-  #done h3{font-family:'Bebas Neue',cursive;font-size:26px;color:#44FF88;letter-spacing:2px;margin-bottom:8px;}
-  #done p{font-size:13px;color:rgba(255,255,255,0.55);margin-bottom:16px;}
-  .dl-btn{display:inline-block;background:#44FF88;color:#111;font-family:'Bebas Neue',cursive;font-size:20px;letter-spacing:2px;padding:11px 32px;border-radius:5px;text-decoration:none;cursor:pointer;border:none;}
-  .dl-btn:hover{background:#66ffaa;}
-  .note{font-size:11px;color:rgba(255,255,255,0.3);margin-top:10px;line-height:1.5;}
-</style>
-</head>
-<body>
-<h1>BLOCK<span>BROWSER</span></h1>
-<div class="sub">DATA BAKER — GENERATE YOUR GAME FILE</div>
-
-<div class="card">
-  <h2>Step 1 — Enter Your TMDB API Key</h2>
-  <p>This tool fetches real movie data from TMDB right here in your browser, then bakes it into a self-contained game file with no runtime API calls — so it works on GitHub Pages.</p>
-  <label>TMDB API Key</label>
-  <input type="text" id="apikey" value="03549aee0d249c4c994eaf6f2f579cf2" placeholder="Your TMDB API key">
-  <button class="btn" onclick="bake()">BAKE THE DATA</button>
-
-  <div id="progress">
-    <div class="prog-bar-wrap"><div class="prog-bar" id="prog-bar"></div></div>
-    <div class="prog-status" id="prog-status">Starting...</div>
-  </div>
-
-  <div id="done">
-    <h3>✓ READY TO PLAY!</h3>
-    <p>Your BlockBrowser game file is ready. Download it and upload to GitHub as <strong>index.html</strong>.</p>
-    <button class="dl-btn" onclick="downloadGame()">DOWNLOAD index.html</button>
-    <div class="note">After uploading to GitHub, wait ~60 seconds for GitHub Pages to update, then visit your live URL.</div>
-  </div>
-</div>
-
-<script>
-const TMDB_BASE='https://api.themoviedb.org/3';
-const IMG_SM='https://image.tmdb.org/t/p/w342';
-const IMG_LG='https://image.tmdb.org/t/p/w500';
-
-const GENRES=[
-  {label:'NEW RELEASES',color:'#e63333',lt:'now_playing',gid:null},
-  {label:'ACTION',      color:'#e65c00',lt:'genre',      gid:28},
-  {label:'COMEDY',      color:'#0099cc',lt:'genre',      gid:35},
-  {label:'HORROR',      color:'#8833cc',lt:'genre',      gid:27},
-  {label:'DRAMA',       color:'#229944',lt:'genre',      gid:18},
-  {label:'SCI-FI',      color:'#cc2288',lt:'genre',      gid:878},
-];
-
-let bakedData=null;
-
-async function bake(){
-  const key=document.getElementById('apikey').value.trim();
-  if(!key){alert('Please enter your TMDB API key');return;}
-
-  document.querySelector('.btn').disabled=true;
-  document.getElementById('progress').style.display='block';
-  document.getElementById('done').style.display='none';
-
-  const bar=document.getElementById('prog-bar');
-  const status=document.getElementById('prog-status');
-  const allMovies=[];
-
-  for(let i=0;i<GENRES.length;i++){
-    const g=GENRES[i];
-    status.textContent=`Fetching ${g.label}...`;
-    let url;
-    if(g.lt==='genre')        url=`${TMDB_BASE}/discover/movie?api_key=${key}&with_genres=${g.gid}&sort_by=popularity.desc&page=1`;
-    else if(g.lt==='now_playing') url=`${TMDB_BASE}/movie/now_playing?api_key=${key}&page=1`;
-    else url=`${TMDB_BASE}/movie/popular?api_key=${key}&page=1`;
-
-    try{
-      const d=await(await fetch(url)).json();
-      const movies=(d.results||[]).slice(0,16).map(m=>({
-        id:m.id,
-        title:m.title||'Unknown',
-        year:(m.release_date||'').slice(0,4)||'—',
-        genre:g.label,
-        genreColor:g.color,
-        rating:m.vote_average?m.vote_average.toFixed(1):'—',
-        desc:m.overview?(m.overview.slice(0,200)+(m.overview.length>200?'…':'')):' ',
-        imgSm:m.poster_path?(IMG_SM+m.poster_path):null,
-        imgLg:m.poster_path?(IMG_LG+m.poster_path):null,
-      }));
-      allMovies.push(movies);
-      status.textContent=`✓ ${g.label} — ${movies.length} movies loaded`;
-    }catch(e){
-      status.textContent=`✗ Failed to load ${g.label}: ${e.message}`;
-      allMovies.push([]);
-    }
-    bar.style.width=`${Math.round((i+1)/GENRES.length*100)}%`;
-    await new Promise(r=>setTimeout(r,200));
-  }
-
-  bakedData=allMovies;
-  status.textContent='All done! Building game file...';
-  bar.style.width='100%';
-  await new Promise(r=>setTimeout(r,400));
-  document.getElementById('done').style.display='block';
-  document.querySelector('.btn').disabled=false;
-}
-
-function downloadGame(){
-  if(!bakedData){alert('Please bake the data first!');return;}
-  const html=buildGameHTML(bakedData);
-  const blob=new Blob([html],{type:'text/html'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='index.html';
-  a.click();
-}
-
-function buildGameHTML(allMovies){
-  const dataJSON=JSON.stringify(allMovies);
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>BlockBrowser</title>
 <style>
@@ -161,6 +24,7 @@ function buildGameHTML(allMovies){
   #controls{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);display:flex;gap:7px;}
   .ck{background:rgba(0,0,0,0.78);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:4px 11px;font-size:10px;color:rgba(255,255,255,0.6);letter-spacing:1px;white-space:nowrap;}
   .ck strong{color:#FFD700;font-family:'VT323',monospace;font-size:13px;}
+
   /* VHS Overlay */
   #vhs-overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.85);}
   #vhs-overlay.active{display:flex;}
@@ -177,7 +41,7 @@ function buildGameHTML(allMovies){
   #vb-meta{font-size:10px;color:rgba(255,255,255,0.45);margin-top:3px;letter-spacing:1px;}
   #vb-tags{display:flex;gap:5px;margin-top:7px;}
   .vtag{font-size:8px;padding:2px 7px;border-radius:3px;letter-spacing:1px;text-transform:uppercase;font-weight:700;}
-  .vtag.g{background:#1565C0;color:#fff;}
+  .vtag.g{color:#fff;}
   .vtag.r{background:#FFD700;color:#111;}
   #vb-body{padding:12px 14px;flex:1;overflow:hidden;}
   #vb-sl{font-family:'Bebas Neue',cursive;font-size:11px;color:rgba(255,255,255,0.28);letter-spacing:3px;margin-bottom:5px;}
@@ -188,6 +52,19 @@ function buildGameHTML(allMovies){
   #vhs-watch:hover{background:#ffe84d;}
   #vhs-putback{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.65);border:1px solid rgba(255,255,255,0.18);font-family:'Bebas Neue',cursive;font-size:17px;padding:9px 14px;border-radius:4px;cursor:pointer;pointer-events:all;}
   #vhs-hint{position:absolute;bottom:-30px;left:50%;transform:translateX(-50%);font-family:'VT323',monospace;font-size:13px;color:rgba(255,255,255,0.35);letter-spacing:2px;white-space:nowrap;}
+
+  /* Loading */
+  #loading{position:fixed;inset:0;background:#000;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.6s;}
+  #loading.out{opacity:0;pointer-events:none;}
+  #ld-logo{font-family:'Bebas Neue',cursive;font-size:clamp(38px,9vw,66px);letter-spacing:6px;color:#FFD700;text-shadow:0 0 30px rgba(255,215,0,0.4);margin-bottom:6px;}
+  #ld-logo span{color:#1565C0;}
+  #ld-sub{font-family:'VT323',monospace;font-size:15px;color:rgba(255,255,255,0.4);letter-spacing:3px;margin-bottom:24px;}
+  #ld-bar-wrap{width:210px;height:5px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden;}
+  #ld-bar{height:100%;width:0%;background:#FFD700;border-radius:3px;transition:width 0.25s;box-shadow:0 0 8px rgba(255,215,0,0.6);}
+  #ld-status{font-size:10px;color:rgba(255,255,255,0.28);margin-top:9px;letter-spacing:1px;min-height:16px;}
+  #ld-retry{margin-top:16px;background:transparent;border:1px solid rgba(255,215,0,0.5);color:#FFD700;font-family:'Bebas Neue',cursive;font-size:16px;letter-spacing:2px;padding:7px 20px;border-radius:4px;cursor:pointer;display:none;}
+  #ld-retry:hover{background:rgba(255,215,0,0.1);}
+
   /* Intro */
   #intro{position:fixed;inset:0;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;transition:opacity 0.7s;}
   #intro.out{opacity:0;pointer-events:none;}
@@ -196,6 +73,7 @@ function buildGameHTML(allMovies){
   #intro-sub{font-family:'VT323',monospace;font-size:17px;color:rgba(255,255,255,0.5);letter-spacing:4px;margin-bottom:42px;}
   #intro-btn{background:#FFD700;color:#111;border:none;font-family:'Bebas Neue',cursive;font-size:23px;letter-spacing:4px;padding:12px 42px;border-radius:4px;cursor:pointer;box-shadow:0 0 28px rgba(255,215,0,0.3);}
   #intro-tag{font-size:11px;color:rgba(255,255,255,0.28);margin-top:16px;letter-spacing:2px;}
+
   /* Mobile */
   #joy-zone{position:absolute;left:0;bottom:0;width:50%;height:44%;pointer-events:all;display:none;}
   #look-zone{position:absolute;right:0;bottom:0;width:50%;height:44%;pointer-events:all;display:none;}
@@ -205,13 +83,24 @@ function buildGameHTML(allMovies){
 </style>
 </head>
 <body>
-<div id="intro">
+
+<div id="loading">
+  <div id="ld-logo">BLOCK<span>BROWSER</span></div>
+  <div id="ld-sub">STOCKING THE SHELVES...</div>
+  <div id="ld-bar-wrap"><div id="ld-bar"></div></div>
+  <div id="ld-status">Connecting to movie database...</div>
+  <button id="ld-retry" onclick="init()">RETRY</button>
+</div>
+
+<div id="intro" style="display:none">
   <div id="intro-logo">BLOCK<span>BROWSER</span></div>
   <div id="intro-sub">YOUR STREAMING STORE IS OPEN</div>
   <button id="intro-btn" onclick="enterStore()">WALK IN</button>
   <div id="intro-tag">Be kind, rewind.</div>
 </div>
+
 <canvas id="canvas"></canvas>
+
 <div id="hud">
   <div id="store-sign">BLOCK<span>BROWSER</span></div>
   <div id="aisle-label"></div>
@@ -227,18 +116,25 @@ function buildGameHTML(allMovies){
   <div id="look-zone"></div>
   <div id="e-btn" onclick="tryInteract()">E</div>
 </div>
+
 <div id="vhs-overlay">
   <div id="vhs-scene">
     <div id="vhs-flipper">
       <div class="vhs-face" id="vhs-front">
         <img id="vhs-fi" alt="" crossorigin="anonymous">
-        <div id="vhs-ff"><div id="vhs-fe" style="font-size:72px;margin-bottom:10px">🎬</div><div id="vhs-ft" style="font-family:'Bebas Neue',cursive;font-size:26px;color:#FFD700;letter-spacing:2px;text-align:center;padding:0 18px"></div></div>
+        <div id="vhs-ff">
+          <div id="vhs-fe" style="font-size:72px;margin-bottom:10px">🎬</div>
+          <div id="vhs-ft" style="font-family:'Bebas Neue',cursive;font-size:26px;color:#FFD700;letter-spacing:2px;text-align:center;padding:0 18px"></div>
+        </div>
       </div>
       <div class="vhs-face" id="vhs-back">
         <div id="vb-header">
           <div id="vb-title">Title</div>
           <div id="vb-meta">Year</div>
-          <div id="vb-tags"><span class="vtag g" id="vb-genre">Genre</span><span class="vtag r" id="vb-rating">★ 0.0</span></div>
+          <div id="vb-tags">
+            <span class="vtag g" id="vb-genre">Genre</span>
+            <span class="vtag r" id="vb-rating">★ 0.0</span>
+          </div>
         </div>
         <div id="vb-body">
           <img id="vb-poster" alt="" crossorigin="anonymous">
@@ -254,413 +150,583 @@ function buildGameHTML(allMovies){
     <div id="vhs-hint">CLICK TO FLIP</div>
   </div>
 </div>
+
 <script>
 'use strict';
-// ═══ BAKED MOVIE DATA ══════════════════════════════════
-const GENRES=[
-  {label:'NEW RELEASES',color:'#e63333'},
-  {label:'ACTION',      color:'#e65c00'},
-  {label:'COMEDY',      color:'#0099cc'},
-  {label:'HORROR',      color:'#8833cc'},
-  {label:'DRAMA',       color:'#229944'},
-  {label:'SCI-FI',      color:'#cc2288'},
-];
-const NUM_GENRES=GENRES.length;
-const SLOTS=16;
-const MOVIES=${dataJSON};
 
-// Poster image cache
-const imgCache={};
-MOVIES.forEach(row=>row.forEach(m=>{
-  if(m.imgSm&&!imgCache[m.imgSm]){const i=new Image();i.crossOrigin='anonymous';i.src=m.imgSm;imgCache[m.imgSm]=i;}
-}));
+// ═══ TMDB CONFIG ═══════════════════════════════════════
+const TMDB_KEY  = '03549aee0d249c4c994eaf6f2f579cf2';
+const TMDB_BASE = 'https://api.themoviedb.org/3';
+const IMG_SM    = 'https://image.tmdb.org/t/p/w342';
+const IMG_LG    = 'https://image.tmdb.org/t/p/w500';
+
+const GENRES = [
+  { label:'NEW RELEASES', color:'#e63333', lt:'now_playing', gid:null },
+  { label:'ACTION',       color:'#e65c00', lt:'genre',       gid:28   },
+  { label:'COMEDY',       color:'#0099cc', lt:'genre',       gid:35   },
+  { label:'HORROR',       color:'#8833cc', lt:'genre',       gid:27   },
+  { label:'DRAMA',        color:'#229944', lt:'genre',       gid:18   },
+  { label:'SCI-FI',       color:'#cc2288', lt:'genre',       gid:878  },
+];
+const NG    = GENRES.length; // 6
+const SLOTS = 16;            // movies per genre row
+const MOVIES = GENRES.map(() => []); // [genreIdx][slotIdx] = movie object
+const imgCache = {};
+
+async function fetchGenre(g, idx) {
+  let url;
+  if (g.lt === 'genre')        url = `${TMDB_BASE}/discover/movie?api_key=${TMDB_KEY}&with_genres=${g.gid}&sort_by=popularity.desc&page=1`;
+  else if (g.lt === 'now_playing') url = `${TMDB_BASE}/movie/now_playing?api_key=${TMDB_KEY}&page=1`;
+  else url = `${TMDB_BASE}/movie/popular?api_key=${TMDB_KEY}&page=1`;
+
+  const res  = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+
+  MOVIES[idx] = (data.results || []).slice(0, SLOTS).map(m => ({
+    id:         m.id,
+    title:      m.title || 'Unknown',
+    year:       (m.release_date || '').slice(0, 4) || '—',
+    genre:      g.label,
+    genreColor: g.color,
+    rating:     m.vote_average ? m.vote_average.toFixed(1) : '—',
+    desc:       m.overview ? (m.overview.slice(0, 200) + (m.overview.length > 200 ? '…' : '')) : ' ',
+    imgSm:      m.poster_path ? (IMG_SM + m.poster_path) : null,
+    imgLg:      m.poster_path ? (IMG_LG + m.poster_path) : null,
+  }));
+
+  MOVIES[idx].forEach(m => {
+    if (m.imgSm && !imgCache[m.imgSm]) {
+      const i = new Image(); i.crossOrigin = 'anonymous'; i.src = m.imgSm;
+      imgCache[m.imgSm] = i;
+    }
+  });
+}
 
 // ═══ CANVAS ════════════════════════════════════════════
-const canvas=document.getElementById('canvas');
-const ctx=canvas.getContext('2d');
-let W=window.innerWidth,H=window.innerHeight;
-canvas.width=W;canvas.height=H;
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+let W = window.innerWidth, H = window.innerHeight;
+canvas.width = W; canvas.height = H;
 
 // ═══ MAP ═══════════════════════════════════════════════
 // 0=floor 1=wall 2=shelf 4=counter 5=backwall
-const RAW=[
-  "111111111111111",
-  "100000000000001",
-  "100000000000001",
-  "100440000044001",
-  "100000000000001",
-  "122222222222221",
-  "122222222222221",
-  "100000000000001",
-  "122222222222221",
-  "122222222222221",
-  "100000000000001",
-  "122222222222221",
-  "122222222222221",
-  "100000000000001",
-  "155555555555551",
-  "155555555555551",
-  "155555555555551",
-  "111111111111111",
+// 15 wide × 18 deep — tight Blockbuster layout
+// Player starts at y=1.6, faces south (angle=PI/2)
+const RAW_MAP = [
+  '111111111111111',
+  '100000000000001',
+  '100000000000001',
+  '100440000044001',
+  '100000000000001',
+  '122222222222221',
+  '122222222222221',
+  '100000000000001',
+  '122222222222221',
+  '122222222222221',
+  '100000000000001',
+  '122222222222221',
+  '122222222222221',
+  '100000000000001',
+  '155555555555551',
+  '155555555555551',
+  '155555555555551',
+  '111111111111111',
 ];
-const MW=15,MH=18;
-const MAP=RAW.map(r=>r.split('').map(Number));
-function mapAt(x,y){const mx=Math.floor(x),my=Math.floor(y);if(mx<0||mx>=MW||my<0||my>=MH)return 1;return MAP[my][mx];}
-function solid(x,y){return mapAt(x,y)!==0;}
+const MW = 15, MH = 18;
+const MAP = RAW_MAP.map(r => r.split('').map(Number));
+function mapAt(x, y) {
+  const mx = Math.floor(x), my = Math.floor(y);
+  if (mx < 0 || mx >= MW || my < 0 || my >= MH) return 1;
+  return MAP[my][mx];
+}
+function solid(x, y) { return mapAt(x, y) !== 0; }
 
-// Which genre index does a given shelf map row correspond to?
-// Each shelf unit (2 rows) shows one genre per ROW on its face
-// But actually: each shelf FACE shows ALL genres stacked vertically
-// The back wall likewise shows all genres stacked
-// genreIndex is determined by vertical position on the wall (not map row)
-
-// Map row → aisle index for genre sign label only
-function aisleLabel(y){
-  if(y<2.5)return'ENTRANCE';
-  if(y<4.5)return'🛒  CHECKOUT';
-  if(y<7.5)return'🎬  NEW RELEASES  ·  💥  ACTION';
-  if(y<10.5)return'😂  COMEDY  ·  👻  HORROR';
-  if(y<13.5)return'🎭  DRAMA  ·  🚀  SCI-FI';
-  return'⭐  FEATURED';
+function getAisleLabel(y) {
+  if (y < 2.5)  return 'ENTRANCE';
+  if (y < 4.5)  return '🛒  CHECKOUT';
+  if (y < 7.5)  return '🎬  NEW RELEASES  ·  💥  ACTION';
+  if (y < 10.5) return '😂  COMEDY  ·  👻  HORROR';
+  if (y < 13.5) return '🎭  DRAMA  ·  🚀  SCI-FI';
+  return '⭐  FEATURED TITLES';
 }
 
 // ═══ WALL TEXTURES ═════════════════════════════════════
-function mkt(fn,w=64,h=64){const c=document.createElement('canvas');c.width=w;c.height=h;fn(c.getContext('2d'),w,h);return c;}
-const T_WALL=mkt((x,w,h)=>{
-  x.fillStyle='#d4a800';x.fillRect(0,0,w,h);
-  x.strokeStyle='rgba(0,0,0,0.07)';x.lineWidth=1;
-  for(let i=0;i<h;i+=16){x.beginPath();x.moveTo(0,i);x.lineTo(w,i);x.stroke();}
-});
-const T_SHELF=mkt((x,w,h)=>{
-  x.fillStyle='#3e2a08';x.fillRect(0,0,w,h);
-  // Shelf boards dividing genre rows
-  for(let i=1;i<NUM_GENRES;i++){
-    const y=Math.round(i*h/NUM_GENRES);
-    x.fillStyle='rgba(0,0,0,0.75)';x.fillRect(0,y-1,w,3);
-    x.fillStyle='rgba(255,255,255,0.07)';x.fillRect(0,y+2,w,1);
-  }
-  x.strokeStyle='rgba(0,0,0,0.12)';x.lineWidth=0.5;
-  for(let i=6;i<w;i+=8){x.beginPath();x.moveTo(i,0);x.lineTo(i,h);x.stroke();}
-});
-const T_COUNTER=mkt((x,w,h)=>{
-  x.fillStyle='#241407';x.fillRect(0,0,w,h);
-  x.fillStyle='rgba(255,215,0,0.3)';x.fillRect(0,0,w,5);
-});
-const T_BACK=mkt((x,w,h)=>{
-  x.fillStyle='#080818';x.fillRect(0,0,w,h);
-  for(let i=1;i<NUM_GENRES;i++){
-    const y=Math.round(i*h/NUM_GENRES);
-    x.fillStyle='rgba(55,35,8,0.95)';x.fillRect(0,y-1,w,3);
-  }
-});
-function wt(c){if(c===1)return T_WALL;if(c===2||c===3)return T_SHELF;if(c===4)return T_COUNTER;if(c===5)return T_BACK;return T_WALL;}
+function mkt(fn, w = 64, h = 64) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  fn(c.getContext('2d'), w, h); return c;
+}
 
-// ═══ VHS SPINE CACHE ═══════════════════════════════════
-const spineC=new Map();
-function getSpine(movie,w,h){
-  const img=movie.imgSm?imgCache[movie.imgSm]:null;
-  const ok=img&&img.complete&&img.naturalWidth>0;
-  const key=movie.id+'_'+Math.ceil(w)+'_'+Math.ceil(h)+'_'+(ok?1:0);
-  if(spineC.has(key))return spineC.get(key);
-  const c=document.createElement('canvas');
-  c.width=Math.max(1,Math.ceil(w));c.height=Math.max(1,Math.ceil(h));
-  const x=c.getContext('2d');
-  if(ok){
-    try{x.drawImage(img,0,0,img.naturalWidth*0.16,img.naturalHeight,0,0,c.width,c.height);}catch(e){}
-    x.fillStyle='rgba(0,0,0,0.25)';x.fillRect(0,0,c.width,c.height);
-  } else {
-    const hue=(movie.id*53)%360;
-    x.fillStyle='hsl('+hue+',40%,16%)';x.fillRect(0,0,c.width,c.height);
-    if(img)img.onload=()=>spineC.delete(key);
+// Yellow Blockbuster walls
+const T_WALL = mkt((x, w, h) => {
+  x.fillStyle = '#d4a800'; x.fillRect(0, 0, w, h);
+  x.strokeStyle = 'rgba(0,0,0,0.07)'; x.lineWidth = 1;
+  for (let i = 0; i < h; i += 16) { x.beginPath(); x.moveTo(0, i); x.lineTo(w, i); x.stroke(); }
+});
+
+// Wood shelf with 6 genre-row dividers
+const T_SHELF = mkt((x, w, h) => {
+  x.fillStyle = '#3e2a08'; x.fillRect(0, 0, w, h);
+  for (let i = 1; i < NG; i++) {
+    const y = Math.round(i * h / NG);
+    x.fillStyle = 'rgba(0,0,0,0.75)'; x.fillRect(0, y - 1, w, 3);
+    x.fillStyle = 'rgba(255,255,255,0.07)'; x.fillRect(0, y + 2, w, 1);
   }
-  // Tiny rotated title
-  const fs=Math.max(4,Math.min(c.width*0.6,9));
+  x.strokeStyle = 'rgba(0,0,0,0.12)'; x.lineWidth = 0.5;
+  for (let i = 6; i < w; i += 8) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, h); x.stroke(); }
+});
+
+const T_COUNTER = mkt((x, w, h) => {
+  x.fillStyle = '#241407'; x.fillRect(0, 0, w, h);
+  x.fillStyle = 'rgba(255,215,0,0.3)'; x.fillRect(0, 0, w, 5);
+  x.strokeStyle = 'rgba(255,215,0,0.18)'; x.lineWidth = 1;
+  x.beginPath(); x.moveTo(0, 10); x.lineTo(w, 10); x.stroke();
+});
+
+const T_BACK = mkt((x, w, h) => {
+  x.fillStyle = '#080818'; x.fillRect(0, 0, w, h);
+  for (let i = 1; i < NG; i++) {
+    const y = Math.round(i * h / NG);
+    x.fillStyle = 'rgba(55,35,8,0.95)'; x.fillRect(0, y - 1, w, 3);
+  }
+});
+
+function wallTex(c) {
+  if (c === 1) return T_WALL;
+  if (c === 2 || c === 3) return T_SHELF;
+  if (c === 4) return T_COUNTER;
+  if (c === 5) return T_BACK;
+  return T_WALL;
+}
+
+// ═══ VHS SPINE CANVAS CACHE ════════════════════════════
+// Each spine is a narrow vertical strip — poster sliver + tiny rotated title
+// Only readable up close (intentional — authentic to real Blockbuster)
+const spineCache = new Map();
+
+function getSpine(movie, w, h) {
+  const img  = movie.imgSm ? imgCache[movie.imgSm] : null;
+  const ok   = img && img.complete && img.naturalWidth > 0;
+  const key  = `${movie.id}_${Math.ceil(w)}_${Math.ceil(h)}_${ok ? 1 : 0}`;
+  if (spineCache.has(key)) return spineCache.get(key);
+
+  const c = document.createElement('canvas');
+  c.width  = Math.max(1, Math.ceil(w));
+  c.height = Math.max(1, Math.ceil(h));
+  const x  = c.getContext('2d');
+
+  if (ok) {
+    try { x.drawImage(img, 0, 0, img.naturalWidth * 0.16, img.naturalHeight, 0, 0, c.width, c.height); } catch(e) {}
+    x.fillStyle = 'rgba(0,0,0,0.22)'; x.fillRect(0, 0, c.width, c.height);
+  } else {
+    const hue = (movie.id * 53) % 360;
+    x.fillStyle = `hsl(${hue},40%,16%)`; x.fillRect(0, 0, c.width, c.height);
+    if (img) img.onload = () => spineCache.delete(key); // refresh when loaded
+  }
+
+  // Tiny rotated title — only legible up close
+  const fs = Math.max(4, Math.min(c.width * 0.6, 9));
   x.save();
-  x.translate(c.width/2,c.height*0.8);
-  x.rotate(-Math.PI/2);
-  x.fillStyle='rgba(255,215,0,0.85)';
-  x.font='bold '+fs+'px Arial';
-  x.textAlign='center';x.textBaseline='middle';
-  const mc=Math.floor(c.height/(fs*0.65));
-  x.fillText(movie.title.slice(0,mc),0,0);
+  x.translate(c.width / 2, c.height * 0.8);
+  x.rotate(-Math.PI / 2);
+  x.fillStyle = 'rgba(255,215,0,0.85)';
+  x.font = `bold ${fs}px Arial`;
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(movie.title.slice(0, Math.floor(c.height / (fs * 0.65))), 0, 0);
   x.restore();
-  // Right shadow
-  const g=x.createLinearGradient(c.width-2,0,c.width,0);
-  g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,0.7)');
-  x.fillStyle=g;x.fillRect(0,0,c.width,c.height);
-  spineC.set(key,c);
-  if(spineC.size>3000){const k=spineC.keys().next().value;spineC.delete(k);}
+
+  // Right-edge depth shadow
+  const g = x.createLinearGradient(c.width - 2, 0, c.width, 0);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.7)');
+  x.fillStyle = g; x.fillRect(0, 0, c.width, c.height);
+
+  spineCache.set(key, c);
+  if (spineCache.size > 3000) { const k = spineCache.keys().next().value; spineCache.delete(k); }
   return c;
 }
 
 // ═══ GENRE SIGN CANVASES ═══════════════════════════════
-const signC=GENRES.map(g=>{
-  const c=document.createElement('canvas');c.width=384;c.height=56;
-  const x=c.getContext('2d');
-  x.fillStyle=g.color;x.fillRect(0,0,384,56);
-  x.fillStyle='rgba(0,0,0,0.22)';x.fillRect(0,48,384,8);
-  x.fillStyle='rgba(0,0,0,0.9)';
-  x.font='bold 30px Arial Black, Arial';
-  x.textAlign='center';x.textBaseline='middle';
-  x.fillText(g.label,192,26);
+const signCanvas = GENRES.map(g => {
+  const c = document.createElement('canvas'); c.width = 384; c.height = 56;
+  const x = c.getContext('2d');
+  x.fillStyle = g.color; x.fillRect(0, 0, 384, 56);
+  x.fillStyle = 'rgba(0,0,0,0.22)'; x.fillRect(0, 48, 384, 8);
+  x.fillStyle = 'rgba(0,0,0,0.88)';
+  x.font = 'bold 28px Arial Black, Arial';
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(g.label, 192, 26);
   return c;
 });
 
 // ═══ PLAYER ════════════════════════════════════════════
-let px=7.5,py=1.6,pAngle=Math.PI/2;
-const FOV=Math.PI/2.5,SPD=0.055;
-function move(dx,dy){if(!solid(px+dx,py))px+=dx;if(!solid(px,py+dy))py+=dy;}
+let px = 7.5, py = 1.6, pAngle = Math.PI / 2;
+const FOV = Math.PI / 2.5, SPD = 0.055;
+function move(dx, dy) {
+  if (!solid(px + dx, py)) px += dx;
+  if (!solid(px, py + dy)) py += dy;
+}
 
-// ═══ RENDER ════════════════════════════════════════════
-const RAYS=Math.min(W,500);
-let hitMovie=null,hitDist=Infinity;
-const hits=[];
+// ═══ RAYCASTER + VHS SPRITE PASS ══════════════════════
+const RAYS = Math.min(W, 500);
+let hitMovie = null, hitDist = Infinity;
+const hits = []; // shelf ray hits collected per frame
 
-function render(){
-  // Floor — blue carpet
-  const fg=ctx.createLinearGradient(0,H/2,0,H);
-  fg.addColorStop(0,'#184488');fg.addColorStop(1,'#0c2650');
-  ctx.fillStyle=fg;ctx.fillRect(0,H/2,W,H/2);
-  ctx.strokeStyle='rgba(8,24,64,0.5)';ctx.lineWidth=1;
-  for(let y=H/2+8;y<H;y+=12){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+function render() {
+  // ── Floor: blue carpet ──
+  const fg = ctx.createLinearGradient(0, H / 2, 0, H);
+  fg.addColorStop(0, '#184488'); fg.addColorStop(1, '#0c2650');
+  ctx.fillStyle = fg; ctx.fillRect(0, H / 2, W, H / 2);
+  ctx.strokeStyle = 'rgba(8,24,64,0.5)'; ctx.lineWidth = 1;
+  for (let y = H / 2 + 8; y < H; y += 12) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
 
-  // Ceiling
-  const cg=ctx.createLinearGradient(0,0,0,H/2);
-  cg.addColorStop(0,'#ede8dc');cg.addColorStop(1,'#d8d0c0');
-  ctx.fillStyle=cg;ctx.fillRect(0,0,W,H/2);
-  for(let lx=W*0.08;lx<W*1.05;lx+=W*0.28){
-    const lg=ctx.createRadialGradient(lx,0,0,lx,0,H*0.3);
-    lg.addColorStop(0,'rgba(255,252,235,0.28)');lg.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.fillStyle=lg;ctx.fillRect(0,0,W,H/2);
+  // ── Ceiling: off-white ──
+  const cg = ctx.createLinearGradient(0, 0, 0, H / 2);
+  cg.addColorStop(0, '#ede8dc'); cg.addColorStop(1, '#d8d0c0');
+  ctx.fillStyle = cg; ctx.fillRect(0, 0, W, H / 2);
+  for (let lx = W * 0.08; lx < W * 1.05; lx += W * 0.28) {
+    const lg = ctx.createRadialGradient(lx, 0, 0, lx, 0, H * 0.3);
+    lg.addColorStop(0, 'rgba(255,252,235,0.28)'); lg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = lg; ctx.fillRect(0, 0, W, H / 2);
   }
 
-  hits.length=0;hitMovie=null;hitDist=Infinity;
+  hits.length = 0;
+  hitMovie = null; hitDist = Infinity;
 
-  for(let i=0;i<RAYS;i++){
-    const ang=pAngle-FOV/2+(i/RAYS)*FOV;
-    const cos=Math.cos(ang),sin=Math.sin(ang);
-    let rx=px,ry=py,d=0,cell=0;
-    while(d<20){rx+=cos*0.015;ry+=sin*0.015;d+=0.015;cell=mapAt(rx,ry);if(cell)break;}
-    const cd=Math.max(0.1,d*Math.cos(ang-pAngle));
-    const sh=Math.min(H*3,H/cd);
-    const st=(H-sh)/2;
-    const sw=Math.ceil(W/RAYS)+1;
-    const sx=Math.floor(i*W/RAYS);
-    const fracX=rx-Math.floor(rx),fracY=ry-Math.floor(ry);
-    const wallX=(fracX<0.022||fracX>0.978)?fracY:fracX;
-    const tex=wt(cell);
-    ctx.drawImage(tex,Math.floor(wallX*tex.width),0,1,tex.height,sx,st,sw,sh);
-    if(cell===2||cell===3||cell===5){
-      hits.push({sx,sw,st,sh,cd,wallX,mapRow:Math.floor(ry),cell,ri:i,rx,ry});
+  // ── Cast rays ──
+  for (let i = 0; i < RAYS; i++) {
+    const ang  = pAngle - FOV / 2 + (i / RAYS) * FOV;
+    const cos  = Math.cos(ang), sin = Math.sin(ang);
+    let rx = px, ry = py, d = 0, cell = 0;
+    while (d < 20) {
+      rx += cos * 0.015; ry += sin * 0.015; d += 0.015;
+      cell = mapAt(rx, ry); if (cell) break;
     }
-    ctx.fillStyle='rgba(0,0,0,'+Math.min(0.9,cd/7)+')';
-    ctx.fillRect(sx,st,sw,sh);
+    const cd  = Math.max(0.1, d * Math.cos(ang - pAngle));
+    const sh  = Math.min(H * 3, H / cd);
+    const st  = (H - sh) / 2;
+    const sw  = Math.ceil(W / RAYS) + 1;
+    const sx  = Math.floor(i * W / RAYS);
+
+    // Fractional wall hit position 0..1
+    const fracX = rx - Math.floor(rx);
+    const fracY = ry - Math.floor(ry);
+    const wallX = (fracX < 0.022 || fracX > 0.978) ? fracY : fracX;
+
+    // Draw base wall texture
+    const tex = wallTex(cell);
+    ctx.drawImage(tex, Math.floor(wallX * tex.width), 0, 1, tex.height, sx, st, sw, sh);
+
+    // Record shelf hits for VHS pass
+    if (cell === 2 || cell === 3 || cell === 5) {
+      hits.push({ sx, sw, st, sh, cd, wallX, rx, ry, ri: i });
+    }
+
+    // Distance fog
+    ctx.fillStyle = `rgba(0,0,0,${Math.min(0.9, cd / 7)})`;
+    ctx.fillRect(sx, st, sw, sh);
   }
 
-  // VHS spine pass
-  const runs=new Map();
-  const csx=Math.floor((RAYS/2)*W/RAYS);
+  // ── VHS Spine Pass ──────────────────────────────────
+  // Group adjacent ray columns into spine-width runs
+  // Each run = one VHS box slot (genreIdx + slotIdx)
+  // Spine height = wall_height / NUM_GENRES (6 rows stacked)
+  const runs = new Map();
+  const csx  = Math.floor((RAYS / 2) * W / RAYS); // screen X of center ray
 
-  for(const h of hits){
-    const slot=Math.min(SLOTS-1,Math.floor(h.wallX*SLOTS));
-    for(let gi=0;gi<NUM_GENRES;gi++){
-      const key=gi+':'+slot+':'+Math.floor(h.rx*2)+':'+Math.floor(h.ry*2);
-      if(!runs.has(key)){
-        runs.set(key,{minX:h.sx,maxX:h.sx+h.sw,st:h.st,sh:h.sh,cd:h.cd,gi,slot,ri:h.ri});
+  for (const h of hits) {
+    const slot = Math.min(SLOTS - 1, Math.floor(h.wallX * SLOTS));
+    for (let gi = 0; gi < NG; gi++) {
+      const key = `${gi}:${slot}:${Math.floor(h.rx * 2)}:${Math.floor(h.ry * 2)}`;
+      if (!runs.has(key)) {
+        runs.set(key, { minX: h.sx, maxX: h.sx + h.sw, st: h.st, sh: h.sh, cd: h.cd, gi, slot, ri: h.ri });
       } else {
-        const r=runs.get(key);
-        r.minX=Math.min(r.minX,h.sx);
-        r.maxX=Math.max(r.maxX,h.sx+h.sw);
-        if(h.sh>r.sh){r.st=h.st;r.sh=h.sh;r.cd=h.cd;}
+        const r = runs.get(key);
+        r.minX = Math.min(r.minX, h.sx);
+        r.maxX = Math.max(r.maxX, h.sx + h.sw);
+        if (h.sh > r.sh) { r.st = h.st; r.sh = h.sh; r.cd = h.cd; }
       }
     }
   }
 
-  for(const [,r] of runs){
-    const bw=r.maxX-r.minX;
-    if(bw<1)continue;
-    const movie=MOVIES[r.gi]?.[r.slot];
-    if(!movie)continue;
-    const rf=1/NUM_GENRES,pad=0.03;
-    const spTop=r.st+r.sh*(r.gi*rf+pad);
-    const spH=Math.max(3,r.sh*(rf-pad*2));
-    const spW=Math.max(1,bw);
-    const spine=getSpine(movie,spW,spH);
-    ctx.drawImage(spine,r.minX,spTop,spW,spH);
-    // Shelf board
-    const by=r.st+r.sh*((r.gi+1)*rf)-1;
-    ctx.fillStyle='rgba(25,14,3,0.95)';
-    ctx.fillRect(r.minX,by,spW,Math.max(2,r.sh*0.02));
-    // Fog
-    ctx.fillStyle='rgba(0,0,0,'+Math.min(0.8,r.cd/7.5)+')';
-    ctx.fillRect(r.minX,spTop,spW,spH);
-    // Spine gap
-    ctx.fillStyle='rgba(0,0,0,0.8)';
-    ctx.fillRect(r.minX,spTop,1,spH);
-    // Hit detection
-    if(r.cd<2.8&&r.cd<hitDist){
-      const midX=r.minX+spW/2,midY=spTop+spH/2;
-      if(Math.abs(midX-csx)<spW*3&&Math.abs(midY-H/2)<spH*2){
-        hitMovie=movie;hitDist=r.cd;
+  for (const [, r] of runs) {
+    const bw = r.maxX - r.minX;
+    if (bw < 1) continue;
+
+    const movie = MOVIES[r.gi]?.[r.slot];
+    if (!movie) continue;
+
+    // Vertical position of this genre row within the wall slice
+    const rowFrac = 1 / NG;
+    const pad     = 0.03;
+    const spTop   = r.st + r.sh * (r.gi * rowFrac + pad);
+    const spH     = Math.max(3, r.sh * (rowFrac - pad * 2));
+    const spW     = Math.max(1, bw);
+
+    // Draw spine
+    const spine = getSpine(movie, spW, spH);
+    ctx.drawImage(spine, r.minX, spTop, spW, spH);
+
+    // Shelf board below this row
+    const boardY = r.st + r.sh * ((r.gi + 1) * rowFrac) - 1;
+    ctx.fillStyle = 'rgba(25,14,3,0.95)';
+    ctx.fillRect(r.minX, boardY, spW, Math.max(2, r.sh * 0.02));
+
+    // Distance fog on spines
+    ctx.fillStyle = `rgba(0,0,0,${Math.min(0.8, r.cd / 7.5)})`;
+    ctx.fillRect(r.minX, spTop, spW, spH);
+
+    // Gap between spines
+    ctx.fillStyle = 'rgba(0,0,0,0.8)';
+    ctx.fillRect(r.minX, spTop, 1, spH);
+
+    // Center crosshair hit detection
+    if (r.cd < 2.8 && r.cd < hitDist) {
+      const midX = r.minX + spW / 2;
+      const midY = spTop + spH / 2;
+      if (Math.abs(midX - csx) < spW * 3 && Math.abs(midY - H / 2) < spH * 2) {
+        hitMovie = movie;
+        hitDist  = r.cd;
       }
     }
   }
 
+  // ── Billboard genre signs ────────────────────────────
   drawSigns();
 
-  // Ceiling light strips
-  ctx.fillStyle='rgba(255,252,232,0.95)';
-  for(let lx=W*0.08;lx<W*1.05;lx+=W*0.28)ctx.fillRect(lx-W*0.055,0,W*0.11,4);
+  // ── Ceiling light strips ────────────────────────────
+  ctx.fillStyle = 'rgba(255,252,232,0.95)';
+  for (let lx = W * 0.08; lx < W * 1.05; lx += W * 0.28)
+    ctx.fillRect(lx - W * 0.055, 0, W * 0.11, 4);
 }
 
-function drawSigns(){
-  const positions=[{wy:5.5,gi:0},{wy:5.5,gi:1},{wy:8.5,gi:2},{wy:8.5,gi:3},{wy:11.5,gi:4},{wy:11.5,gi:5}];
-  const cx=MW/2;
-  // Draw two signs per aisle: left half and right half
-  const aislePositions=[
-    {wy:5.5,left:0,right:1},
-    {wy:8.5,left:2,right:3},
-    {wy:11.5,left:4,right:5},
+function drawSigns() {
+  // Project genre signs as billboards above each aisle
+  const aisles = [
+    { wy: 5.5, pairs: [0, 1] },
+    { wy: 8.5, pairs: [2, 3] },
+    { wy: 11.5, pairs: [4, 5] },
   ];
-  for(const a of aislePositions){
-    const dx=cx-px,dy=a.wy-py;
-    const camX=dx*Math.cos(-pAngle)-dy*Math.sin(-pAngle);
-    const camZ=dx*Math.sin(-pAngle)+dy*Math.cos(-pAngle);
-    if(camZ<0.3)continue;
-    const scrX=(0.5+camX/(camZ*Math.tan(FOV/2)))*W;
-    const scale=H/camZ;
-    const sw=Math.min(W*0.28,scale*1.8);
-    const sh=sw*(signC[0].height/signC[0].width);
-    const scrY=H/2-scale*0.65-sh/2;
-    if(scrY+sh<0||scrY>H)continue;
-    const fog=Math.min(0.88,camZ/11);
-    ctx.globalAlpha=Math.max(0,1-fog);
-    // Left sign
-    ctx.drawImage(signC[a.left],scrX-sw-4,scrY,sw,sh);
-    // Right sign
-    ctx.drawImage(signC[a.right],scrX+4,scrY,sw,sh);
-    ctx.globalAlpha=1;
+  const cx = MW / 2;
+  for (const a of aisles) {
+    const dx = cx - px, dy = a.wy - py;
+    const camX =  dx * Math.cos(-pAngle) - dy * Math.sin(-pAngle);
+    const camZ =  dx * Math.sin(-pAngle) + dy * Math.cos(-pAngle);
+    if (camZ < 0.3) continue;
+    const scrX = (0.5 + camX / (camZ * Math.tan(FOV / 2))) * W;
+    const scale = H / camZ;
+    const sw  = Math.min(W * 0.26, scale * 1.7);
+    const sh  = sw * (signCanvas[0].height / signCanvas[0].width);
+    const scrY = H / 2 - scale * 0.65 - sh / 2;
+    if (scrY + sh < 0 || scrY > H) continue;
+    const fog = Math.min(0.88, camZ / 11);
+    ctx.globalAlpha = Math.max(0, 1 - fog);
+    ctx.drawImage(signCanvas[a.pairs[0]], scrX - sw - 3, scrY, sw, sh);
+    ctx.drawImage(signCanvas[a.pairs[1]], scrX + 3, scrY, sw, sh);
+    ctx.globalAlpha = 1;
   }
 }
 
-// Minimap
-function minimap(){
-  const ms=5,mw=MW*ms,mh=MH*ms,ox=W-mw-10,oy=H-mh-10;
-  ctx.fillStyle='rgba(0,0,0,0.65)';ctx.fillRect(ox-1,oy-1,mw+2,mh+2);
-  for(let my=0;my<MH;my++)for(let mx=0;mx<MW;mx++){
-    const c=MAP[my][mx];
-    ctx.fillStyle=c===0?'#0d2040':c===1?'#b89000':c===2||c===3?'#6a4c14':c===4?'#3a1a08':'#0a0a20';
-    ctx.fillRect(ox+mx*ms,oy+my*ms,ms-1,ms-1);
+// ═══ MINIMAP ═══════════════════════════════════════════
+function minimap() {
+  const ms = 5, mw = MW * ms, mh = MH * ms;
+  const ox = W - mw - 10, oy = H - mh - 10;
+  ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(ox - 1, oy - 1, mw + 2, mh + 2);
+  for (let my = 0; my < MH; my++) {
+    for (let mx = 0; mx < MW; mx++) {
+      const c = MAP[my][mx];
+      ctx.fillStyle = c === 0 ? '#0d2040' : c === 1 ? '#b89000' : c === 2 ? '#6a4c14' : c === 4 ? '#3a1a08' : '#0a0a20';
+      ctx.fillRect(ox + mx * ms, oy + my * ms, ms - 1, ms - 1);
+    }
   }
-  ctx.fillStyle='#FFD700';ctx.beginPath();ctx.arc(ox+px*ms,oy+py*ms,3,0,Math.PI*2);ctx.fill();
-  ctx.strokeStyle='#FFD700';ctx.lineWidth=1.5;
-  ctx.beginPath();ctx.moveTo(ox+px*ms,oy+py*ms);
-  ctx.lineTo(ox+px*ms+Math.cos(pAngle)*9,oy+py*ms+Math.sin(pAngle)*9);ctx.stroke();
+  ctx.fillStyle = '#FFD700';
+  ctx.beginPath(); ctx.arc(ox + px * ms, oy + py * ms, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(ox + px * ms, oy + py * ms);
+  ctx.lineTo(ox + px * ms + Math.cos(pAngle) * 9, oy + py * ms + Math.sin(pAngle) * 9);
+  ctx.stroke();
 }
 
-// Aisle label
-const aisleEl=document.getElementById('aisle-label');
-let lastAisle='',aisleT=null;
-function updateAisle(){
-  const lbl=aisleLabel(py);
-  if(lbl!==lastAisle){lastAisle=lbl;aisleEl.textContent=lbl;aisleEl.classList.add('show');clearTimeout(aisleT);aisleT=setTimeout(()=>aisleEl.classList.remove('show'),2400);}
+// ═══ HUD ═══════════════════════════════════════════════
+const aisleEl = document.getElementById('aisle-label');
+let lastAisle = '', aisleT = null;
+function updateAisle() {
+  const lbl = getAisleLabel(py);
+  if (lbl !== lastAisle) {
+    lastAisle = lbl; aisleEl.textContent = lbl;
+    aisleEl.classList.add('show');
+    clearTimeout(aisleT);
+    aisleT = setTimeout(() => aisleEl.classList.remove('show'), 2400);
+  }
 }
 
-const pickEl=document.getElementById('pickup-prompt');
-function updatePrompt(){
-  if(hitMovie){pickEl.classList.add('show');document.getElementById('crosshair').classList.add('dim');if(isMobile)document.getElementById('e-btn').style.display='flex';}
-  else{pickEl.classList.remove('show');document.getElementById('crosshair').classList.remove('dim');if(isMobile)document.getElementById('e-btn').style.display='none';}
+const pickEl = document.getElementById('pickup-prompt');
+function updatePrompt() {
+  if (hitMovie) {
+    pickEl.classList.add('show');
+    document.getElementById('crosshair').classList.add('dim');
+    if (isMobile) document.getElementById('e-btn').style.display = 'flex';
+  } else {
+    pickEl.classList.remove('show');
+    document.getElementById('crosshair').classList.remove('dim');
+    if (isMobile) document.getElementById('e-btn').style.display = 'none';
+  }
 }
 
-// VHS flip
-let vhsOpen=false,vhsFlipped=false,curMovie=null;
-function openVHS(m){
-  curMovie=m;vhsOpen=true;vhsFlipped=false;
-  if(pointerLocked)document.exitPointerLock();
-  const fi=document.getElementById('vhs-fi'),ff=document.getElementById('vhs-ff');
-  if(m.imgLg){fi.src=m.imgLg;fi.style.display='block';ff.style.display='none';}
-  else{fi.style.display='none';ff.style.display='flex';document.getElementById('vhs-ft').textContent=m.title;}
-  document.getElementById('vb-title').textContent=m.title;
-  document.getElementById('vb-meta').textContent=m.year+'  ·  ★ '+m.rating;
-  document.getElementById('vb-genre').textContent=m.genre;
-  document.getElementById('vb-genre').style.background=m.genreColor||'#1565C0';
-  document.getElementById('vb-rating').textContent='★ '+m.rating;
-  document.getElementById('vb-syn').textContent=m.desc;
-  const bp=document.getElementById('vb-poster');
-  if(m.imgSm){bp.src=m.imgSm;bp.style.display='block';}else bp.style.display='none';
+// ═══ VHS FLIP EXPERIENCE ═══════════════════════════════
+let vhsOpen = false, vhsFlipped = false, curMovie = null;
+
+function openVHS(m) {
+  curMovie = m; vhsOpen = true; vhsFlipped = false;
+  if (pointerLocked) document.exitPointerLock();
+
+  const fi = document.getElementById('vhs-fi');
+  const ff = document.getElementById('vhs-ff');
+  if (m.imgLg) {
+    fi.src = m.imgLg; fi.style.display = 'block'; ff.style.display = 'none';
+  } else {
+    fi.style.display = 'none'; ff.style.display = 'flex';
+    document.getElementById('vhs-ft').textContent = m.title;
+  }
+
+  document.getElementById('vb-title').textContent  = m.title;
+  document.getElementById('vb-meta').textContent   = `${m.year}  ·  ★ ${m.rating}`;
+  document.getElementById('vb-genre').textContent  = m.genre;
+  document.getElementById('vb-genre').style.background = m.genreColor || '#1565C0';
+  document.getElementById('vb-rating').textContent = `★ ${m.rating}`;
+  document.getElementById('vb-syn').textContent    = m.desc;
+
+  const bp = document.getElementById('vb-poster');
+  if (m.imgSm) { bp.src = m.imgSm; bp.style.display = 'block'; } else bp.style.display = 'none';
+
   document.getElementById('vhs-flipper').classList.remove('flipped');
-  document.getElementById('vhs-hint').textContent='CLICK TO FLIP';
+  document.getElementById('vhs-hint').textContent = 'CLICK TO FLIP';
   document.getElementById('vhs-overlay').classList.add('active');
 }
-document.getElementById('vhs-overlay').addEventListener('click',e=>{
-  if(e.target.id==='vhs-watch'||e.target.id==='vhs-putback')return;
-  if(!vhsOpen)return;
-  vhsFlipped=!vhsFlipped;
-  document.getElementById('vhs-flipper').classList.toggle('flipped',vhsFlipped);
-  document.getElementById('vhs-hint').textContent=vhsFlipped?'CLICK TO FLIP BACK':'CLICK TO FLIP';
+
+document.getElementById('vhs-overlay').addEventListener('click', e => {
+  if (e.target.id === 'vhs-watch' || e.target.id === 'vhs-putback') return;
+  if (!vhsOpen) return;
+  vhsFlipped = !vhsFlipped;
+  document.getElementById('vhs-flipper').classList.toggle('flipped', vhsFlipped);
+  document.getElementById('vhs-hint').textContent = vhsFlipped ? 'CLICK TO FLIP BACK' : 'CLICK TO FLIP';
 });
-function closeVHS(){vhsOpen=false;document.getElementById('vhs-overlay').classList.remove('active');}
-function watchMovie(){
-  if(!curMovie)return;
-  window.open('https://www.google.com/search?q=watch+'+encodeURIComponent(curMovie.title)+'+streaming','_blank');
+
+function closeVHS() { vhsOpen = false; document.getElementById('vhs-overlay').classList.remove('active'); }
+
+function watchMovie() {
+  if (!curMovie) return;
+  window.open(`https://www.google.com/search?q=watch+${encodeURIComponent(curMovie.title)}+streaming`, '_blank');
 }
-function tryInteract(){if(hitMovie&&!vhsOpen)openVHS(hitMovie);}
 
-// Input
-const keys={};
-document.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if((e.key==='e'||e.key==='E')&&!vhsOpen)tryInteract();if(e.key==='Escape'&&vhsOpen)closeVHS();});
-document.addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
-let pointerLocked=false;
-canvas.addEventListener('click',()=>{if(vhsOpen||!document.getElementById('intro').classList.contains('out'))return;canvas.requestPointerLock();});
-document.addEventListener('pointerlockchange',()=>{pointerLocked=document.pointerLockElement===canvas;});
-document.addEventListener('mousemove',e=>{if(pointerLocked&&!vhsOpen)pAngle+=e.movementX*0.002;});
+function tryInteract() { if (hitMovie && !vhsOpen) openVHS(hitMovie); }
 
-const isMobile='ontouchstart' in window;
-if(isMobile){document.getElementById('joy-zone').style.display='block';document.getElementById('look-zone').style.display='block';document.getElementById('controls').style.display='none';}
-let joyOn=false,joyX=0,joyY=0;
-const jZ=document.getElementById('joy-zone'),jD=document.getElementById('joy-dot');
-jZ.addEventListener('touchstart',e=>{joyOn=true;e.preventDefault();},{passive:false});
-jZ.addEventListener('touchend',()=>{joyOn=false;joyX=0;joyY=0;jD.style.transform='translate(-50%,-50%)';});
-jZ.addEventListener('touchmove',e=>{
-  if(!joyOn)return;e.preventDefault();
-  const t=e.touches[0],r=jZ.getBoundingClientRect();
-  let dx=t.clientX-(r.left+r.width/2),dy=t.clientY-(r.top+r.height*0.65);
-  const d=Math.sqrt(dx*dx+dy*dy),mx=32;if(d>mx){dx=dx/d*mx;dy=dy/d*mx;}
-  joyX=dx/mx;joyY=dy/mx;
-  jD.style.transform='translate(calc(-50% + '+dx+'px),calc(-50% + '+dy+'px))';
-},{passive:false});
-let lkX=0,lkOn=false;
-const lZ=document.getElementById('look-zone');
-lZ.addEventListener('touchstart',e=>{lkOn=true;lkX=e.touches[0].clientX;e.preventDefault();},{passive:false});
-lZ.addEventListener('touchend',()=>lkOn=false);
-lZ.addEventListener('touchmove',e=>{if(!lkOn)return;e.preventDefault();pAngle+=(e.touches[0].clientX-lkX)*0.005;lkX=e.touches[0].clientX;},{passive:false});
+// ═══ INPUT ═════════════════════════════════════════════
+const keys = {};
+document.addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  if ((e.key === 'e' || e.key === 'E') && !vhsOpen) tryInteract();
+  if (e.key === 'Escape' && vhsOpen) closeVHS();
+});
+document.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
-let started=false;
-function loop(){
+let pointerLocked = false;
+canvas.addEventListener('click', () => {
+  if (vhsOpen || !document.getElementById('intro').classList.contains('out')) return;
+  canvas.requestPointerLock();
+});
+document.addEventListener('pointerlockchange', () => { pointerLocked = document.pointerLockElement === canvas; });
+document.addEventListener('mousemove', e => { if (pointerLocked && !vhsOpen) pAngle += e.movementX * 0.002; });
+
+const isMobile = 'ontouchstart' in window;
+if (isMobile) {
+  document.getElementById('joy-zone').style.display  = 'block';
+  document.getElementById('look-zone').style.display = 'block';
+  document.getElementById('controls').style.display  = 'none';
+}
+
+let joyOn = false, joyX = 0, joyY = 0;
+const jZ = document.getElementById('joy-zone'), jD = document.getElementById('joy-dot');
+jZ.addEventListener('touchstart', e => { joyOn = true; e.preventDefault(); }, { passive: false });
+jZ.addEventListener('touchend',   () => { joyOn = false; joyX = 0; joyY = 0; jD.style.transform = 'translate(-50%,-50%)'; });
+jZ.addEventListener('touchmove',  e => {
+  if (!joyOn) return; e.preventDefault();
+  const t = e.touches[0], r = jZ.getBoundingClientRect();
+  let dx = t.clientX - (r.left + r.width / 2), dy = t.clientY - (r.top + r.height * 0.65);
+  const dist = Math.sqrt(dx * dx + dy * dy), mx = 32;
+  if (dist > mx) { dx = dx / dist * mx; dy = dy / dist * mx; }
+  joyX = dx / mx; joyY = dy / mx;
+  jD.style.transform = `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`;
+}, { passive: false });
+
+let lkX = 0, lkOn = false;
+const lZ = document.getElementById('look-zone');
+lZ.addEventListener('touchstart', e => { lkOn = true; lkX = e.touches[0].clientX; e.preventDefault(); }, { passive: false });
+lZ.addEventListener('touchend',   () => lkOn = false);
+lZ.addEventListener('touchmove',  e => { if (!lkOn) return; e.preventDefault(); pAngle += (e.touches[0].clientX - lkX) * 0.005; lkX = e.touches[0].clientX; }, { passive: false });
+
+// ═══ GAME LOOP ══════════════════════════════════════════
+let started = false;
+function loop() {
   requestAnimationFrame(loop);
-  if(!started||vhsOpen)return;
-  if(keys['w']||keys['arrowup'])   move(Math.cos(pAngle)*SPD,Math.sin(pAngle)*SPD);
-  if(keys['s']||keys['arrowdown']) move(-Math.cos(pAngle)*SPD,-Math.sin(pAngle)*SPD);
-  if(keys['a']||keys['arrowleft']) pAngle-=0.032;
-  if(keys['d']||keys['arrowright'])pAngle+=0.032;
-  if(joyOn){move(Math.cos(pAngle)*(-joyY)*SPD*1.3,Math.sin(pAngle)*(-joyY)*SPD*1.3);pAngle+=joyX*0.04;}
-  render();minimap();updateAisle();updatePrompt();
+  if (!started || vhsOpen) return;
+  if (keys['w'] || keys['arrowup'])    move( Math.cos(pAngle) * SPD,  Math.sin(pAngle) * SPD);
+  if (keys['s'] || keys['arrowdown'])  move(-Math.cos(pAngle) * SPD, -Math.sin(pAngle) * SPD);
+  if (keys['a'] || keys['arrowleft'])  pAngle -= 0.032;
+  if (keys['d'] || keys['arrowright']) pAngle += 0.032;
+  if (joyOn) {
+    move(Math.cos(pAngle) * (-joyY) * SPD * 1.3, Math.sin(pAngle) * (-joyY) * SPD * 1.3);
+    pAngle += joyX * 0.04;
+  }
+  render(); minimap(); updateAisle(); updatePrompt();
 }
 requestAnimationFrame(loop);
-function enterStore(){
+
+function enterStore() {
   document.getElementById('intro').classList.add('out');
-  setTimeout(()=>{document.getElementById('intro').style.display='none';started=true;},700);
-  if(!isMobile)canvas.requestPointerLock();
+  setTimeout(() => { document.getElementById('intro').style.display = 'none'; started = true; }, 700);
+  if (!isMobile) canvas.requestPointerLock();
 }
-window.addEventListener('resize',()=>{W=window.innerWidth;H=window.innerHeight;canvas.width=W;canvas.height=H;});
-<\/script>
-</body>
-</html>`;
+
+window.addEventListener('resize', () => { W = window.innerWidth; H = window.innerHeight; canvas.width = W; canvas.height = H; });
+
+// ═══ INIT ═══════════════════════════════════════════════
+async function init() {
+  const bar    = document.getElementById('ld-bar');
+  const status = document.getElementById('ld-status');
+  const retry  = document.getElementById('ld-retry');
+  retry.style.display = 'none';
+  bar.style.width = '0%';
+
+  let anyFailed = false;
+
+  for (let i = 0; i < GENRES.length; i++) {
+    status.textContent = `Loading ${GENRES[i].label}...`;
+    try {
+      await fetchGenre(GENRES[i], i);
+    } catch(e) {
+      console.warn('Failed:', GENRES[i].label, e);
+      anyFailed = true;
+    }
+    bar.style.width = `${Math.round((i + 1) / GENRES.length * 100)}%`;
+  }
+
+  if (anyFailed && MOVIES.every(row => row.length === 0)) {
+    status.textContent = 'Could not connect. Check your internet connection.';
+    retry.style.display = 'block';
+    return;
+  }
+
+  status.textContent = 'Ready!';
+  await new Promise(r => setTimeout(r, 300));
+  document.getElementById('loading').classList.add('out');
+  setTimeout(() => {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('intro').style.display   = 'flex';
+  }, 600);
 }
-</script>
-</body>
-</html>`;
-}
+
+init();
 </script>
 </body>
 </html>
