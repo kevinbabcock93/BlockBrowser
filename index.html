@@ -140,9 +140,22 @@
 // ═══ TMDB ══════════════════════════════════════════════
 const TMDB_KEY  = '03549aee0d249c4c994eaf6f2f579cf2';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
-const IMG_SM    = 'https://image.tmdb.org/t/p/w154'; // smaller thumbnails for perf
+const IMG_SM    = 'https://image.tmdb.org/t/p/w154';
 const IMG_LG    = 'https://image.tmdb.org/t/p/w342';
 
+// ═══ STORE LAYOUT ══════════════════════════════════════
+// Map: 15 wide × 18 deep
+// Shelf cells: x=1..13, so 13 unique X positions
+// Each shelf has ROWS_PER_SHELF genre rows stacked vertically
+// BOXES_PER_CELL = how many boxes fit side-by-side in one map cell
+// Total boxes per shelf face = 13 cells × BOXES_PER_CELL × ROWS_PER_SHELF
+
+const ROWS_PER_SHELF  = 6;   // genre rows stacked vertically
+const BOXES_PER_CELL  = 2;   // face-out boxes per map cell width
+const SHELF_CELLS     = 13;  // usable map X positions (1..13)
+const BOXES_PER_ROW   = SHELF_CELLS * BOXES_PER_CELL; // 26 boxes per genre row
+
+// ═══ GENRE DEFINITIONS ═════════════════════════════════
 const GENRES = [
   { label:'NEW RELEASES', color:'#e63333', lt:'now_playing', gid:null },
   { label:'ACTION',       color:'#e65c00', lt:'genre',       gid:28   },
@@ -151,76 +164,101 @@ const GENRES = [
   { label:'DRAMA',        color:'#229944', lt:'genre',       gid:18   },
   { label:'SCI-FI',       color:'#cc2288', lt:'genre',       gid:878  },
 ];
-const NG    = GENRES.length; // 6 genre rows per shelf
-const SLOTS = 26;            // 13 map cells × 2 face-out boxes per cell = 26 unique per genre row
+const NG = GENRES.length; // must equal ROWS_PER_SHELF
 
-// MOVIES[genreIdx][globalSlot] — permanently assigned, never duplicated
-const MOVIES = GENRES.map(() => new Array(SLOTS).fill(null));
+// ═══ MOVIE STORAGE ═════════════════════════════════════
+// SHELF_MAP: the single source of truth for what movie is at each position
+// Key: `${shelfId}:${genreRow}:${boxIndex}` → movie object
+// shelfId = which shelf unit (identified by map row pair)
+// genreRow = 0..5
+// boxIndex = 0..BOXES_PER_ROW-1
+// This guarantees zero duplicates — each movie object lives at exactly one key.
 
-// Poster image objects — loaded lazily based on distance
-// imgCache[url] = { img: HTMLImageElement, loaded: bool }
-const imgCache = new Map();
+const SHELF_MAP = new Map();
+
+// All fetched movies stored by genre, then assigned to shelf positions
+const GENRE_POOLS = GENRES.map(() => []); // raw fetched movies, not yet assigned
+
+// Image cache — lazy loaded by distance
+const imgCache = new Map(); // url → { img, loaded }
 
 function getOrCreateImg(url) {
   if (!url) return null;
-  if (!imgCache.has(url)) {
-    imgCache.set(url, { img: null, loaded: false });
-  }
+  if (!imgCache.has(url)) imgCache.set(url, { img: null, loaded: false });
   return imgCache.get(url);
 }
 
-// Only kick off actual image load when player gets close
 function requestPosterLoad(url) {
   if (!url) return;
-  const entry = getOrCreateImg(url);
-  if (entry.img) return; // already loading or loaded
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.onload  = () => { entry.loaded = true; spineCache.clear(); }; // invalidate spine cache on load
+  const e = getOrCreateImg(url);
+  if (e.img) return;
+  const img = new Image(); img.crossOrigin = 'anonymous';
+  img.onload  = () => { e.loaded = true; boxCache.clear(); };
   img.onerror = () => {};
-  img.src = url;
-  entry.img = img;
+  img.src = url; e.img = img;
 }
 
 async function fetchGenre(g, idx) {
-  let url1, url2;
-  if (g.lt === 'genre') {
-    url1 = `${TMDB_BASE}/discover/movie?api_key=${TMDB_KEY}&with_genres=${g.gid}&sort_by=popularity.desc&page=1`;
-    url2 = `${TMDB_BASE}/discover/movie?api_key=${TMDB_KEY}&with_genres=${g.gid}&sort_by=popularity.desc&page=2`;
-  } else if (g.lt === 'now_playing') {
-    url1 = `${TMDB_BASE}/movie/now_playing?api_key=${TMDB_KEY}&page=1`;
-    url2 = `${TMDB_BASE}/movie/now_playing?api_key=${TMDB_KEY}&page=2`;
-  } else {
-    url1 = `${TMDB_BASE}/movie/popular?api_key=${TMDB_KEY}&page=1`;
-    url2 = `${TMDB_BASE}/movie/popular?api_key=${TMDB_KEY}&page=2`;
-  }
-
-  const [res1, res2] = await Promise.all([fetch(url1), fetch(url2)]);
-  if (!res1.ok) throw new Error(`HTTP ${res1.status}`);
-  const [d1, d2] = await Promise.all([res1.json(), res2.json()]);
-
-  // Combine both pages, dedupe by id, take first SLOTS
+  const makeUrl = (page) => {
+    if (g.lt === 'genre')        return `${TMDB_BASE}/discover/movie?api_key=${TMDB_KEY}&with_genres=${g.gid}&sort_by=popularity.desc&page=${page}`;
+    if (g.lt === 'now_playing')  return `${TMDB_BASE}/movie/now_playing?api_key=${TMDB_KEY}&page=${page}`;
+    return `${TMDB_BASE}/movie/popular?api_key=${TMDB_KEY}&page=${page}`;
+  };
+  const [r1, r2] = await Promise.all([fetch(makeUrl(1)), fetch(makeUrl(2))]);
+  if (!r1.ok) throw new Error(`HTTP ${r1.status}`);
+  const [d1, d2] = await Promise.all([r1.json(), r2.json()]);
   const seen = new Set();
-  const all  = [...(d1.results || []), ...(d2.results || [])].filter(m => {
-    if (seen.has(m.id)) return false;
-    seen.add(m.id); return true;
-  }).slice(0, 26);
-
-  all.forEach((m, slot) => {
-    MOVIES[idx][slot] = {
-      id:         m.id,
-      title:      m.title || 'Unknown',
-      year:       (m.release_date || '').slice(0, 4) || '—',
-      genre:      g.label,
-      genreColor: g.color,
-      rating:     m.vote_average ? m.vote_average.toFixed(1) : '—',
-      desc:       m.overview ? (m.overview.slice(0, 200) + (m.overview.length > 200 ? '…' : '')) : ' ',
-      imgSm:      m.poster_path ? (IMG_SM + m.poster_path) : null,
-      imgLg:      m.poster_path ? (IMG_LG + m.poster_path) : null,
-      swatchHue:  (m.id * 53) % 360,
-    };
-    if (MOVIES[idx][slot].imgSm) getOrCreateImg(MOVIES[idx][slot].imgSm);
+  const all  = [...(d1.results||[]), ...(d2.results||[])].filter(m => {
+    if (seen.has(m.id)) return false; seen.add(m.id); return true;
   });
+  GENRE_POOLS[idx] = all.map(m => ({
+    id:         m.id,
+    title:      m.title || 'Unknown',
+    year:       (m.release_date||'').slice(0,4) || '—',
+    genre:      g.label,
+    genreColor: g.color,
+    rating:     m.vote_average ? m.vote_average.toFixed(1) : '—',
+    desc:       m.overview ? (m.overview.slice(0,200)+(m.overview.length>200?'…':'')) : ' ',
+    imgSm:      m.poster_path ? (IMG_SM+m.poster_path) : null,
+    imgLg:      m.poster_path ? (IMG_LG+m.poster_path) : null,
+    hue:        (m.id * 53) % 360,
+  }));
+}
+
+// After all genres fetched, assign movies to shelf positions
+// Each genre pool → one genre row, boxes assigned left-to-right
+// No movie ever appears at more than one position
+function assignMoviesToShelves() {
+  // Shelf IDs in the store (one per aisle pair + back wall)
+  // We have 3 aisle pairs and 1 back wall = 4 shelf faces visible to player
+  // But each shelf face shows ALL NG genre rows
+  // So we need NG pools × BOXES_PER_ROW unique movies per pool
+  // Each pool gets movies assigned sequentially — no sharing
+
+  // Shelves in the store (by their map Y row pair)
+  const SHELF_IDS = ['aisle1', 'aisle2', 'aisle3', 'backwall'];
+
+  for (let gi = 0; gi < NG; gi++) {
+    const pool = GENRE_POOLS[gi];
+    let poolIdx = 0;
+    for (const shelfId of SHELF_IDS) {
+      for (let box = 0; box < BOXES_PER_ROW; box++) {
+        const key = `${shelfId}:${gi}:${box}`;
+        if (poolIdx < pool.length) {
+          SHELF_MAP.set(key, pool[poolIdx++]);
+        }
+      }
+    }
+  }
+}
+
+// Map shelf map-row → shelf ID
+function shelfIdForRow(mapRow, cell) {
+  if (cell === 5) return 'backwall';
+  if (mapRow <= 6)  return 'aisle1';
+  if (mapRow <= 9)  return 'aisle2';
+  if (mapRow <= 12) return 'aisle3';
+  return 'aisle3';
 }
 
 // ═══ CANVAS ════════════════════════════════════════════
@@ -270,490 +308,424 @@ function getAisleLabel(y) {
 }
 
 // ═══ WALL TEXTURES ═════════════════════════════════════
-function mkt(fn, w = 64, h = 64) {
-  const c = document.createElement('canvas'); c.width = w; c.height = h;
-  fn(c.getContext('2d'), w, h); return c;
+function mkt(fn, w=64, h=64) {
+  const c = document.createElement('canvas'); c.width=w; c.height=h;
+  fn(c.getContext('2d'),w,h); return c;
 }
-const T_WALL = mkt((x, w, h) => {
-  x.fillStyle = '#d4a800'; x.fillRect(0, 0, w, h);
-  x.strokeStyle = 'rgba(0,0,0,0.07)'; x.lineWidth = 1;
-  for (let i = 0; i < h; i += 16) { x.beginPath(); x.moveTo(0, i); x.lineTo(w, i); x.stroke(); }
+const T_WALL = mkt((x,w,h) => {
+  x.fillStyle='#d4a800'; x.fillRect(0,0,w,h);
+  x.strokeStyle='rgba(0,0,0,0.07)'; x.lineWidth=1;
+  for(let i=0;i<h;i+=16){x.beginPath();x.moveTo(0,i);x.lineTo(w,i);x.stroke();}
 });
-const T_SHELF = mkt((x, w, h) => {
-  x.fillStyle = '#3e2a08'; x.fillRect(0, 0, w, h);
-  for (let i = 1; i < NG; i++) {
-    const y = Math.round(i * h / NG);
-    x.fillStyle = 'rgba(0,0,0,0.75)'; x.fillRect(0, y - 1, w, 3);
-    x.fillStyle = 'rgba(255,255,255,0.07)'; x.fillRect(0, y + 2, w, 1);
+const T_SHELF = mkt((x,w,h) => {
+  x.fillStyle='#3e2a08'; x.fillRect(0,0,w,h);
+  // Shelf boards for NG rows
+  for(let i=1;i<NG;i++){
+    const y=Math.round(i*h/NG);
+    x.fillStyle='rgba(0,0,0,0.75)'; x.fillRect(0,y-1,w,3);
+    x.fillStyle='rgba(255,255,255,0.07)'; x.fillRect(0,y+2,w,1);
   }
-  x.strokeStyle = 'rgba(0,0,0,0.12)'; x.lineWidth = 0.5;
-  for (let i = 6; i < w; i += 8) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, h); x.stroke(); }
+  x.strokeStyle='rgba(0,0,0,0.12)'; x.lineWidth=0.5;
+  for(let i=6;i<w;i+=8){x.beginPath();x.moveTo(i,0);x.lineTo(i,h);x.stroke();}
 });
-const T_COUNTER = mkt((x, w, h) => {
-  x.fillStyle = '#241407'; x.fillRect(0, 0, w, h);
-  x.fillStyle = 'rgba(255,215,0,0.3)'; x.fillRect(0, 0, w, 5);
+const T_COUNTER = mkt((x,w,h) => {
+  x.fillStyle='#241407'; x.fillRect(0,0,w,h);
+  x.fillStyle='rgba(255,215,0,0.3)'; x.fillRect(0,0,w,5);
 });
-const T_BACK = mkt((x, w, h) => {
-  x.fillStyle = '#080818'; x.fillRect(0, 0, w, h);
-  for (let i = 1; i < NG; i++) {
-    const y = Math.round(i * h / NG);
-    x.fillStyle = 'rgba(55,35,8,0.95)'; x.fillRect(0, y - 1, w, 3);
+const T_BACK = mkt((x,w,h) => {
+  x.fillStyle='#080818'; x.fillRect(0,0,w,h);
+  for(let i=1;i<NG;i++){
+    const y=Math.round(i*h/NG);
+    x.fillStyle='rgba(55,35,8,0.95)'; x.fillRect(0,y-1,w,3);
   }
 });
 function wallTex(c) {
-  if (c === 1) return T_WALL;
-  if (c === 2 || c === 3) return T_SHELF;
-  if (c === 4) return T_COUNTER;
-  if (c === 5) return T_BACK;
-  return T_WALL;
+  if(c===1)return T_WALL; if(c===2||c===3)return T_SHELF;
+  if(c===4)return T_COUNTER; if(c===5)return T_BACK; return T_WALL;
 }
 
-// ═══ SPINE CACHE ═══════════════════════════════════════
-// Only built for movies within render distance — cleared when posters load
-const spineCache = new Map();
+// ═══ BOX FACE CANVAS CACHE ═════════════════════════════
+const boxCache = new Map();
 
-function getSpine(movie, w, h) {
+function getBoxCanvas(movie, w, h) {
   const entry = movie.imgSm ? imgCache.get(movie.imgSm) : null;
   const ok    = entry && entry.loaded && entry.img;
-  const key   = `${movie.id}_${Math.ceil(w)}_${Math.ceil(h)}_${ok ? 1 : 0}`;
-  if (spineCache.has(key)) return spineCache.get(key);
+  const key   = `${movie.id}_${Math.ceil(w)}_${Math.ceil(h)}_${ok?1:0}`;
+  if (boxCache.has(key)) return boxCache.get(key);
 
   const cw = Math.max(1, Math.ceil(w));
   const ch = Math.max(1, Math.ceil(h));
-  const c  = document.createElement('canvas');
-  c.width = cw; c.height = ch;
-  const x = c.getContext('2d');
+  const c  = document.createElement('canvas'); c.width=cw; c.height=ch;
+  const x  = c.getContext('2d');
 
+  // ── Cover face ──────────────────────────────────────
   if (ok) {
-    // Draw full poster art filling the box face
     try { x.drawImage(entry.img, 0, 0, cw, ch); } catch(e) {}
-    // Subtle vignette to give depth
-    const vig = x.createLinearGradient(0, 0, cw, 0);
-    vig.addColorStop(0,   'rgba(0,0,0,0.3)');
-    vig.addColorStop(0.15,'rgba(0,0,0,0)');
-    vig.addColorStop(0.85,'rgba(0,0,0,0)');
-    vig.addColorStop(1,   'rgba(0,0,0,0.5)');
-    x.fillStyle = vig; x.fillRect(0, 0, cw, ch);
   } else {
-    // Colored fallback — genre color swatch
-    x.fillStyle = `hsl(${movie.swatchHue},45%,16%)`; x.fillRect(0, 0, cw, ch);
-    const g = x.createLinearGradient(0, 0, 0, ch);
-    g.addColorStop(0, 'rgba(255,255,255,0.1)'); g.addColorStop(1, 'rgba(0,0,0,0.4)');
-    x.fillStyle = g; x.fillRect(0, 0, cw, ch);
-    if (entry && !entry.img) requestPosterLoad(movie.imgSm); // trigger load
+    // Colored fallback with gradient
+    x.fillStyle = `hsl(${movie.hue},45%,16%)`; x.fillRect(0,0,cw,ch);
+    const g = x.createLinearGradient(0,0,0,ch);
+    g.addColorStop(0,'rgba(255,255,255,0.12)'); g.addColorStop(1,'rgba(0,0,0,0.5)');
+    x.fillStyle=g; x.fillRect(0,0,cw,ch);
+    if (entry && !entry.img) requestPosterLoad(movie.imgSm);
   }
 
-  // Title strip at bottom — dark band with movie title
-  // Only draw if box is tall enough to be legible
-  if (ch > 12) {
-    const stripH = Math.max(3, Math.min(ch * 0.22, 14));
-    x.fillStyle = 'rgba(0,0,0,0.72)';
-    x.fillRect(0, ch - stripH, cw, stripH);
-    if (ch > 18) {
-      const fs = Math.max(3, Math.min(stripH * 0.6, cw * 0.45, 8));
+  // ── 3D Box illusion ─────────────────────────────────
+  // Top edge — lighter strip (like the top of the box catching light)
+  const topH = Math.max(2, ch * 0.055);
+  const topGrad = x.createLinearGradient(0,0,0,topH);
+  topGrad.addColorStop(0,'rgba(255,255,255,0.45)');
+  topGrad.addColorStop(1,'rgba(255,255,255,0.05)');
+  x.fillStyle = topGrad; x.fillRect(0,0,cw,topH);
+
+  // Left spine — dark vertical strip (depth illusion)
+  const spineW = Math.max(2, cw * 0.12);
+  const spineGrad = x.createLinearGradient(0,0,spineW,0);
+  spineGrad.addColorStop(0,'rgba(0,0,0,0.65)');
+  spineGrad.addColorStop(1,'rgba(0,0,0,0)');
+  x.fillStyle = spineGrad; x.fillRect(0,0,spineW,ch);
+
+  // Bottom title strip
+  if (ch > 14) {
+    const stripH = Math.max(3, Math.min(ch * 0.2, 13));
+    x.fillStyle = 'rgba(0,0,0,0.75)';
+    x.fillRect(0, ch-stripH, cw, stripH);
+    if (cw > 10 && ch > 20) {
+      const fs = Math.max(3, Math.min(stripH * 0.58, cw * 0.42, 8));
       x.fillStyle = 'rgba(255,215,0,0.95)';
       x.font = `bold ${fs}px Arial`;
-      x.textAlign = 'center';
-      x.textBaseline = 'middle';
-      // Clip title to fit in box width
-      const maxChars = Math.floor(cw / (fs * 0.55));
-      x.fillText(movie.title.slice(0, maxChars), cw / 2, ch - stripH / 2);
+      x.textAlign = 'center'; x.textBaseline = 'middle';
+      x.fillText(movie.title.slice(0, Math.floor(cw/(fs*0.52))), cw/2, ch-stripH/2);
     }
   }
 
-  // Left spine edge — dark sliver to suggest box depth
-  x.fillStyle = 'rgba(0,0,0,0.55)';
-  x.fillRect(0, 0, Math.max(1, cw * 0.06), ch);
+  // Right edge darkening
+  const rightGrad = x.createLinearGradient(cw-Math.max(2,cw*0.1),0,cw,0);
+  rightGrad.addColorStop(0,'rgba(0,0,0,0)');
+  rightGrad.addColorStop(1,'rgba(0,0,0,0.55)');
+  x.fillStyle = rightGrad; x.fillRect(0,0,cw,ch);
 
-  // Right edge shadow
-  const re = x.createLinearGradient(cw - Math.max(1, cw * 0.08), 0, cw, 0);
-  re.addColorStop(0, 'rgba(0,0,0,0)'); re.addColorStop(1, 'rgba(0,0,0,0.6)');
-  x.fillStyle = re; x.fillRect(0, 0, cw, ch);
+  // Outer border
+  x.strokeStyle='rgba(0,0,0,0.9)'; x.lineWidth=0.5;
+  x.strokeRect(0.5,0.5,cw-1,ch-1);
 
-  // Outer border — thin black line
-  x.strokeStyle = 'rgba(0,0,0,0.9)'; x.lineWidth = 0.5;
-  x.strokeRect(0.5, 0.5, cw - 1, ch - 1);
-
-  spineCache.set(key, c);
-  if (spineCache.size > 1500) { const k = spineCache.keys().next().value; spineCache.delete(k); }
+  boxCache.set(key, c);
+  if (boxCache.size > 1200) { const k=boxCache.keys().next().value; boxCache.delete(k); }
   return c;
 }
 
 // ═══ GENRE SIGN CANVASES ═══════════════════════════════
 const signCanvas = GENRES.map(g => {
-  const c = document.createElement('canvas'); c.width = 320; c.height = 52;
+  const c = document.createElement('canvas'); c.width=320; c.height=52;
   const x = c.getContext('2d');
-  x.fillStyle = g.color; x.fillRect(0, 0, 320, 52);
-  x.fillStyle = 'rgba(0,0,0,0.22)'; x.fillRect(0, 44, 320, 8);
-  x.fillStyle = 'rgba(0,0,0,0.88)';
-  x.font = 'bold 26px Arial Black, Arial';
-  x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.fillText(g.label, 160, 24);
+  x.fillStyle=g.color; x.fillRect(0,0,320,52);
+  x.fillStyle='rgba(0,0,0,0.22)'; x.fillRect(0,44,320,8);
+  x.fillStyle='rgba(0,0,0,0.88)';
+  x.font='bold 26px Arial Black, Arial';
+  x.textAlign='center'; x.textBaseline='middle';
+  x.fillText(g.label,160,24);
   return c;
 });
 
 // ═══ PLAYER ════════════════════════════════════════════
-let px = 7.5, py = 2.5, pAngle = Math.PI / 2;
-const FOV = Math.PI / 2.5, SPD = 0.055;
-function move(dx, dy) {
-  if (!solid(px + dx, py)) px += dx;
-  if (!solid(px, py + dy)) py += dy;
-}
+let px=7.5, py=2.5, pAngle=Math.PI/2;
+const FOV=Math.PI/2.5, SPD=0.055;
+function move(dx,dy) { if(!solid(px+dx,py))px+=dx; if(!solid(px,py+dy))py+=dy; }
 
 // ═══ RENDER DISTANCES ══════════════════════════════════
-const DIST_POSTER = 3.5;  // load + show poster image within this distance
-const DIST_SPINE  = 8.0;  // show spine canvas (with title text) within this
-// Beyond DIST_SPINE: just draw a fast colored rect from the wall texture
+const DIST_POSTER = 4.0;
+const DIST_DETAIL = 9.0;
 
 // ═══ RAYCASTER ═════════════════════════════════════════
-const RAYS = Math.min(W, 420); // reduced ray count for perf
-let hitMovie = null, hitDist = Infinity;
-const hits = [];
+const RAYS = Math.min(W, 480);
+let hitMovie=null, hitDist=Infinity;
+const hits=[];
 
 function render() {
-  // Floor
-  const fg = ctx.createLinearGradient(0, H / 2, 0, H);
-  fg.addColorStop(0, '#184488'); fg.addColorStop(1, '#0c2650');
-  ctx.fillStyle = fg; ctx.fillRect(0, H / 2, W, H / 2);
-  ctx.strokeStyle = 'rgba(8,24,64,0.45)'; ctx.lineWidth = 1;
-  for (let y = H / 2 + 8; y < H; y += 14) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  // Floor — blue carpet
+  const fg=ctx.createLinearGradient(0,H/2,0,H);
+  fg.addColorStop(0,'#184488'); fg.addColorStop(1,'#0c2650');
+  ctx.fillStyle=fg; ctx.fillRect(0,H/2,W,H/2);
+  ctx.strokeStyle='rgba(8,24,64,0.45)'; ctx.lineWidth=1;
+  for(let y=H/2+8;y<H;y+=14){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
 
   // Ceiling
-  const cg = ctx.createLinearGradient(0, 0, 0, H / 2);
-  cg.addColorStop(0, '#ede8dc'); cg.addColorStop(1, '#d8d0c0');
-  ctx.fillStyle = cg; ctx.fillRect(0, 0, W, H / 2);
-  for (let lx = W * 0.08; lx < W * 1.05; lx += W * 0.28) {
-    const lg = ctx.createRadialGradient(lx, 0, 0, lx, 0, H * 0.3);
-    lg.addColorStop(0, 'rgba(255,252,235,0.25)'); lg.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = lg; ctx.fillRect(0, 0, W, H / 2);
+  const cg=ctx.createLinearGradient(0,0,0,H/2);
+  cg.addColorStop(0,'#ede8dc'); cg.addColorStop(1,'#d8d0c0');
+  ctx.fillStyle=cg; ctx.fillRect(0,0,W,H/2);
+  for(let lx=W*0.08;lx<W*1.05;lx+=W*0.28){
+    const lg=ctx.createRadialGradient(lx,0,0,lx,0,H*0.3);
+    lg.addColorStop(0,'rgba(255,252,235,0.25)'); lg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=lg; ctx.fillRect(0,0,W,H/2);
   }
 
-  hits.length = 0;
-  hitMovie = null; hitDist = Infinity;
+  hits.length=0; hitMovie=null; hitDist=Infinity;
 
-  for (let i = 0; i < RAYS; i++) {
-    const ang = pAngle - FOV / 2 + (i / RAYS) * FOV;
-    const cos = Math.cos(ang), sin = Math.sin(ang);
-    let rx = px, ry = py, d = 0, cell = 0;
-    while (d < 20) {
-      rx += cos * 0.015; ry += sin * 0.015; d += 0.015;
-      cell = mapAt(rx, ry); if (cell) break;
+  for(let i=0;i<RAYS;i++){
+    const ang=pAngle-FOV/2+(i/RAYS)*FOV;
+    const cos=Math.cos(ang), sin=Math.sin(ang);
+    let rx=px, ry=py, d=0, cell=0;
+    while(d<20){rx+=cos*0.015;ry+=sin*0.015;d+=0.015;cell=mapAt(rx,ry);if(cell)break;}
+    const cd=Math.max(0.1,d*Math.cos(ang-pAngle));
+    const sh=Math.min(H*3,H/cd);
+    const st=(H-sh)/2;
+    const sw=Math.ceil(W/RAYS)+1;
+    const sx=Math.floor(i*W/RAYS);
+    const fracX=rx-Math.floor(rx), fracY=ry-Math.floor(ry);
+    const wallX=(fracX<0.022||fracX>0.978)?fracY:fracX;
+    ctx.drawImage(wallTex(cell),Math.floor(wallX*64),0,1,64,sx,st,sw,sh);
+    if(cell===2||cell===3||cell===5){
+      hits.push({sx,sw,st,sh,cd,wallX,rx,ry,mapRow:Math.floor(ry),cell,ri:i});
     }
-    const cd  = Math.max(0.1, d * Math.cos(ang - pAngle));
-    const sh  = Math.min(H * 3, H / cd);
-    const st  = (H - sh) / 2;
-    const sw  = Math.ceil(W / RAYS) + 1;
-    const sx  = Math.floor(i * W / RAYS);
-    const fracX = rx - Math.floor(rx), fracY = ry - Math.floor(ry);
-    const wallX = (fracX < 0.022 || fracX > 0.978) ? fracY : fracX;
-
-    const tex = wallTex(cell);
-    ctx.drawImage(tex, Math.floor(wallX * tex.width), 0, 1, tex.height, sx, st, sw, sh);
-
-    if (cell === 2 || cell === 3 || cell === 5) {
-      hits.push({ sx, sw, st, sh, cd, wallX, rx, ry, ri: i });
-    }
-
-    ctx.fillStyle = `rgba(0,0,0,${Math.min(0.9, cd / 7)})`;
-    ctx.fillRect(sx, st, sw, sh);
+    ctx.fillStyle=`rgba(0,0,0,${Math.min(0.9,cd/7)})`;
+    ctx.fillRect(sx,st,sw,sh);
   }
 
-  // ── VHS Spine Pass ─────────────────────────────────
-  // Boxes are FACE-OUT like the reference photo — full cover art visible.
-  // Each map cell subdivided into BOXES_PER_CELL boxes.
-  // Box proportions: width:height = ~0.68 (portrait, like a DVD/VHS case face-on)
+  // ── Box rendering pass ─────────────────────────────
+  // Group ray columns into box-sized runs.
+  // Key = shelfId : genreRow : boxIndex
+  // boxIndex = cellX_offset * BOXES_PER_CELL + sub (0 or 1 within cell)
+  // This ensures every position maps to exactly one unique movie from SHELF_MAP.
 
-  const BOXES_PER_CELL = 2; // 2 face-out boxes per map cell = 26 unique per genre row
   const runs = new Map();
-  const csx  = Math.floor((RAYS / 2) * W / RAYS);
+  const csx  = Math.floor((RAYS/2)*W/RAYS);
 
-  for (const h of hits) {
-    const cellX   = Math.floor(h.rx);
-    const fracX   = h.rx - cellX;
-    const subSlot = Math.min(BOXES_PER_CELL - 1, Math.floor(fracX * BOXES_PER_CELL));
-    for (let gi = 0; gi < NG; gi++) {
-      const key = `${gi}:${cellX}:${subSlot}:${Math.floor(h.ry)}`;
-      if (!runs.has(key)) {
-        runs.set(key, { minX: h.sx, maxX: h.sx + h.sw, st: h.st, sh: h.sh, cd: h.cd, gi, cellX, subSlot, ri: h.ri });
+  for(const h of hits){
+    const cellX   = Math.floor(h.rx);           // map column 1..13
+    const fracX   = h.rx - cellX;               // 0..1 within cell
+    const sub     = Math.min(BOXES_PER_CELL-1, Math.floor(fracX*BOXES_PER_CELL));
+    const boxIdx  = (cellX-1)*BOXES_PER_CELL + sub; // 0..25
+    const shelfId = shelfIdForRow(h.mapRow, h.cell);
+
+    for(let gi=0;gi<NG;gi++){
+      const key=`${shelfId}:${gi}:${boxIdx}`;
+      if(!runs.has(key)){
+        runs.set(key,{minX:h.sx,maxX:h.sx+h.sw,st:h.st,sh:h.sh,cd:h.cd,gi,shelfId,boxIdx,ri:h.ri});
       } else {
-        const r = runs.get(key);
-        r.minX = Math.min(r.minX, h.sx);
-        r.maxX = Math.max(r.maxX, h.sx + h.sw);
-        if (h.sh > r.sh) { r.st = h.st; r.sh = h.sh; r.cd = h.cd; }
+        const r=runs.get(key);
+        r.minX=Math.min(r.minX,h.sx);
+        r.maxX=Math.max(r.maxX,h.sx+h.sw);
+        if(h.sh>r.sh){r.st=h.st;r.sh=h.sh;r.cd=h.cd;}
       }
     }
   }
 
-  for (const [, r] of runs) {
-    const bw = r.maxX - r.minX;
-    if (bw < 1) continue;
+  for(const [key,r] of runs){
+    const bw=r.maxX-r.minX;
+    if(bw<1)continue;
+    const movie=SHELF_MAP.get(key);
+    if(!movie)continue;
 
-    const globalSlot = (r.cellX - 1) * BOXES_PER_CELL + r.subSlot;
-    const slot  = Math.max(0, Math.min(MOVIES[r.gi].length - 1, globalSlot));
-    const movie = MOVIES[r.gi]?.[slot];
-    if (!movie) continue;
+    // Row geometry — NG rows stacked on shelf face
+    const rowFrac = 1/NG;
+    const rowH    = r.sh*rowFrac;
+    const rowTop  = r.st+r.sh*r.gi*rowFrac;
 
-    // Row geometry
-    const rowFrac = 1 / NG;
-    const rowH    = r.sh * rowFrac;
-    const rowTop  = r.st + r.sh * r.gi * rowFrac;
+    // Box size — portrait, gap on right
+    const gapPx = Math.max(1,Math.round(bw*0.06));
+    const boxW  = Math.max(2, bw-gapPx);
+    const boxH  = Math.min(rowH*0.88, boxW/0.68); // portrait ratio, fits in row
+    const boxTop= rowTop+(rowH-boxH)*0.5;          // vertically centered
 
-    // Box dimensions — face-out portrait case
-    // Width fills most of the cell subdivision, height = width / 0.68 (portrait ratio)
-    // but capped to 90% of row height so it fits cleanly on the shelf
-    const gapPx  = Math.max(1, Math.round(bw * 0.05)); // 5% gap between boxes
-    const boxW   = Math.max(2, bw - gapPx);
-    const idealH = boxW / 0.68;                         // portrait aspect
-    const boxH   = Math.min(rowH * 0.90, idealH);       // never taller than row
-    const boxTop = rowTop + (rowH - boxH) * 0.5;        // vertically centered in row
-
-    if (r.cd <= DIST_POSTER) {
+    if(r.cd<=DIST_POSTER){
       requestPosterLoad(movie.imgSm);
-      const face = getSpine(movie, boxW, boxH);
-      ctx.drawImage(face, r.minX, boxTop, boxW, boxH);
-    } else if (r.cd <= DIST_SPINE) {
-      const face = getSpine(movie, boxW, boxH);
-      ctx.drawImage(face, r.minX, boxTop, boxW, boxH);
+      ctx.drawImage(getBoxCanvas(movie,boxW,boxH),r.minX,boxTop,boxW,boxH);
+    } else if(r.cd<=DIST_DETAIL){
+      ctx.drawImage(getBoxCanvas(movie,boxW,boxH),r.minX,boxTop,boxW,boxH);
     } else {
-      // Far LOD — fast colored rect, same portrait shape
-      ctx.fillStyle = `hsl(${movie.swatchHue},40%,18%)`;
-      ctx.fillRect(r.minX, boxTop, boxW, boxH);
-      // Lighter top strip (box top edge)
-      ctx.fillStyle = `hsl(${movie.swatchHue},40%,28%)`;
-      ctx.fillRect(r.minX, boxTop, boxW, Math.max(1, boxH * 0.05));
+      // Far LOD — fast flat rect with 3D hint
+      ctx.fillStyle=`hsl(${movie.hue},40%,18%)`;
+      ctx.fillRect(r.minX,boxTop,boxW,boxH);
+      // Top highlight
+      ctx.fillStyle=`hsl(${movie.hue},40%,34%)`;
+      ctx.fillRect(r.minX,boxTop,boxW,Math.max(1,boxH*0.06));
+      // Left spine shadow
+      ctx.fillStyle='rgba(0,0,0,0.5)';
+      ctx.fillRect(r.minX,boxTop,Math.max(1,boxW*0.1),boxH);
     }
 
-    // Shelf board spanning full row width at the bottom of the row
-    ctx.fillStyle = 'rgba(15,8,1,0.97)';
-    ctx.fillRect(r.minX - gapPx, rowTop + rowH - Math.max(2, rowH * 0.07), bw + gapPx, Math.max(2, rowH * 0.07));
+    // Shelf board at bottom of this row
+    ctx.fillStyle='rgba(14,8,1,0.97)';
+    ctx.fillRect(r.minX,rowTop+rowH-Math.max(2,rowH*0.07),bw,Math.max(2,rowH*0.07));
 
     // Gap between boxes
-    ctx.fillStyle = 'rgba(0,0,0,0.88)';
-    ctx.fillRect(r.minX + boxW, boxTop, gapPx, boxH);
+    ctx.fillStyle='rgba(0,0,0,0.9)';
+    ctx.fillRect(r.minX+boxW,boxTop,gapPx,boxH);
 
     // Distance fog
-    ctx.fillStyle = `rgba(0,0,0,${Math.min(0.78, r.cd / 8)})`;
-    ctx.fillRect(r.minX, boxTop, boxW, boxH);
+    ctx.fillStyle=`rgba(0,0,0,${Math.min(0.78,r.cd/8)})`;
+    ctx.fillRect(r.minX,boxTop,boxW,boxH);
 
     // Hit detection
-    if (r.cd < 2.8 && r.cd < hitDist) {
-      const midX = r.minX + boxW / 2, midY = boxTop + boxH / 2;
-      if (Math.abs(midX - csx) < boxW * 2 && Math.abs(midY - H / 2) < boxH) {
-        hitMovie = movie; hitDist = r.cd;
+    if(r.cd<2.8&&r.cd<hitDist){
+      const midX=r.minX+boxW/2,midY=boxTop+boxH/2;
+      if(Math.abs(midX-csx)<boxW*2&&Math.abs(midY-H/2)<boxH){
+        hitMovie=movie; hitDist=r.cd;
       }
     }
   }
 
   drawSigns();
 
-  // Ceiling strips
-  ctx.fillStyle = 'rgba(255,252,232,0.95)';
-  for (let lx = W * 0.08; lx < W * 1.05; lx += W * 0.28)
-    ctx.fillRect(lx - W * 0.055, 0, W * 0.11, 4);
+  // Ceiling light strips
+  ctx.fillStyle='rgba(255,252,232,0.95)';
+  for(let lx=W*0.08;lx<W*1.05;lx+=W*0.28)
+    ctx.fillRect(lx-W*0.055,0,W*0.11,4);
 }
 
 function drawSigns() {
-  const aisles = [
-    { wy: 5.5, pairs: [0, 1] },
-    { wy: 8.5, pairs: [2, 3] },
-    { wy: 11.5, pairs: [4, 5] },
-  ];
-  for (const a of aisles) {
-    const dx = MW / 2 - px, dy = a.wy - py;
-    const camX = dx * Math.cos(-pAngle) - dy * Math.sin(-pAngle);
-    const camZ = dx * Math.sin(-pAngle) + dy * Math.cos(-pAngle);
-    if (camZ < 0.3) continue;
-    const scrX  = (0.5 + camX / (camZ * Math.tan(FOV / 2))) * W;
-    const scale = H / camZ;
-    const sw    = Math.min(W * 0.25, scale * 1.6);
-    const sh    = sw * (signCanvas[0].height / signCanvas[0].width);
-    const scrY  = H / 2 - scale * 0.65 - sh / 2;
-    if (scrY + sh < 0 || scrY > H) continue;
-    const fog = Math.min(0.88, camZ / 11);
-    ctx.globalAlpha = Math.max(0, 1 - fog);
-    ctx.drawImage(signCanvas[a.pairs[0]], scrX - sw - 3, scrY, sw, sh);
-    ctx.drawImage(signCanvas[a.pairs[1]], scrX + 3, scrY, sw, sh);
-    ctx.globalAlpha = 1;
+  const aisles=[{wy:5.5,pairs:[0,1]},{wy:8.5,pairs:[2,3]},{wy:11.5,pairs:[4,5]}];
+  for(const a of aisles){
+    const dx=MW/2-px,dy=a.wy-py;
+    const camX=dx*Math.cos(-pAngle)-dy*Math.sin(-pAngle);
+    const camZ=dx*Math.sin(-pAngle)+dy*Math.cos(-pAngle);
+    if(camZ<0.3)continue;
+    const scrX=(0.5+camX/(camZ*Math.tan(FOV/2)))*W;
+    const scale=H/camZ;
+    const sw=Math.min(W*0.25,scale*1.6);
+    const sh=sw*(signCanvas[0].height/signCanvas[0].width);
+    const scrY=H/2-scale*0.65-sh/2;
+    if(scrY+sh<0||scrY>H)continue;
+    ctx.globalAlpha=Math.max(0,1-Math.min(0.88,camZ/11));
+    ctx.drawImage(signCanvas[a.pairs[0]],scrX-sw-3,scrY,sw,sh);
+    ctx.drawImage(signCanvas[a.pairs[1]],scrX+3,scrY,sw,sh);
+    ctx.globalAlpha=1;
   }
 }
 
 // ═══ MINIMAP ═══════════════════════════════════════════
-function minimap() {
-  const ms = 5, mw = MW * ms, mh = MH * ms;
-  const ox = W - mw - 10, oy = H - mh - 10;
-  ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(ox - 1, oy - 1, mw + 2, mh + 2);
-  for (let my = 0; my < MH; my++) for (let mx = 0; mx < MW; mx++) {
-    const c = MAP[my][mx];
-    ctx.fillStyle = c === 0 ? '#0d2040' : c === 1 ? '#b89000' : c === 2 ? '#6a4c14' : c === 4 ? '#3a1a08' : '#0a0a20';
-    ctx.fillRect(ox + mx * ms, oy + my * ms, ms - 1, ms - 1);
+function minimap(){
+  const ms=5,mw=MW*ms,mh=MH*ms,ox=W-mw-10,oy=H-mh-10;
+  ctx.fillStyle='rgba(0,0,0,0.65)';ctx.fillRect(ox-1,oy-1,mw+2,mh+2);
+  for(let my=0;my<MH;my++)for(let mx=0;mx<MW;mx++){
+    const c=MAP[my][mx];
+    ctx.fillStyle=c===0?'#0d2040':c===1?'#b89000':c===2?'#6a4c14':c===4?'#3a1a08':'#0a0a20';
+    ctx.fillRect(ox+mx*ms,oy+my*ms,ms-1,ms-1);
   }
-  ctx.fillStyle = '#FFD700';
-  ctx.beginPath(); ctx.arc(ox + px * ms, oy + py * ms, 3, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(ox + px * ms, oy + py * ms);
-  ctx.lineTo(ox + px * ms + Math.cos(pAngle) * 9, oy + py * ms + Math.sin(pAngle) * 9);
-  ctx.stroke();
+  ctx.fillStyle='#FFD700';ctx.beginPath();ctx.arc(ox+px*ms,oy+py*ms,3,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#FFD700';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(ox+px*ms,oy+py*ms);
+  ctx.lineTo(ox+px*ms+Math.cos(pAngle)*9,oy+py*ms+Math.sin(pAngle)*9);ctx.stroke();
 }
 
 // ═══ HUD ═══════════════════════════════════════════════
-const aisleEl = document.getElementById('aisle-label');
-let lastAisle = '', aisleT = null;
-function updateAisle() {
-  const lbl = getAisleLabel(py);
-  if (lbl !== lastAisle) {
-    lastAisle = lbl; aisleEl.textContent = lbl;
-    aisleEl.classList.add('show');
-    clearTimeout(aisleT);
-    aisleT = setTimeout(() => aisleEl.classList.remove('show'), 2400);
-  }
+const aisleEl=document.getElementById('aisle-label');
+let lastAisle='',aisleT=null;
+function updateAisle(){
+  const lbl=getAisleLabel(py);
+  if(lbl!==lastAisle){lastAisle=lbl;aisleEl.textContent=lbl;aisleEl.classList.add('show');clearTimeout(aisleT);aisleT=setTimeout(()=>aisleEl.classList.remove('show'),2400);}
 }
-const pickEl = document.getElementById('pickup-prompt');
-function updatePrompt() {
-  if (hitMovie) {
-    pickEl.classList.add('show');
-    document.getElementById('crosshair').classList.add('dim');
-    if (isMobile) document.getElementById('e-btn').style.display = 'flex';
-  } else {
-    pickEl.classList.remove('show');
-    document.getElementById('crosshair').classList.remove('dim');
-    if (isMobile) document.getElementById('e-btn').style.display = 'none';
-  }
+const pickEl=document.getElementById('pickup-prompt');
+function updatePrompt(){
+  if(hitMovie){pickEl.classList.add('show');document.getElementById('crosshair').classList.add('dim');if(isMobile)document.getElementById('e-btn').style.display='flex';}
+  else{pickEl.classList.remove('show');document.getElementById('crosshair').classList.remove('dim');if(isMobile)document.getElementById('e-btn').style.display='none';}
 }
 
 // ═══ VHS FLIP ══════════════════════════════════════════
-let vhsOpen = false, vhsFlipped = false, curMovie = null;
-function openVHS(m) {
-  curMovie = m; vhsOpen = true; vhsFlipped = false;
-  if (pointerLocked) document.exitPointerLock();
-  const fi = document.getElementById('vhs-fi'), ff = document.getElementById('vhs-ff');
-  if (m.imgLg) {
-    // Load large poster on demand
-    fi.src = m.imgLg; fi.style.display = 'block'; ff.style.display = 'none';
-  } else {
-    fi.style.display = 'none'; ff.style.display = 'flex';
-    document.getElementById('vhs-ft').textContent = m.title;
-  }
-  document.getElementById('vb-title').textContent  = m.title;
-  document.getElementById('vb-meta').textContent   = `${m.year}  ·  ★ ${m.rating}`;
-  document.getElementById('vb-genre').textContent  = m.genre;
-  document.getElementById('vb-genre').style.background = m.genreColor || '#1565C0';
-  document.getElementById('vb-rating').textContent = `★ ${m.rating}`;
-  document.getElementById('vb-syn').textContent    = m.desc;
-  const bp = document.getElementById('vb-poster');
-  if (m.imgSm) { bp.src = m.imgSm; bp.style.display = 'block'; } else bp.style.display = 'none';
+let vhsOpen=false,vhsFlipped=false,curMovie=null;
+function openVHS(m){
+  curMovie=m;vhsOpen=true;vhsFlipped=false;
+  if(pointerLocked)document.exitPointerLock();
+  const fi=document.getElementById('vhs-fi'),ff=document.getElementById('vhs-ff');
+  if(m.imgLg){fi.src=m.imgLg;fi.style.display='block';ff.style.display='none';}
+  else{fi.style.display='none';ff.style.display='flex';document.getElementById('vhs-ft').textContent=m.title;}
+  document.getElementById('vb-title').textContent=m.title;
+  document.getElementById('vb-meta').textContent=`${m.year}  ·  ★ ${m.rating}`;
+  document.getElementById('vb-genre').textContent=m.genre;
+  document.getElementById('vb-genre').style.background=m.genreColor||'#1565C0';
+  document.getElementById('vb-rating').textContent=`★ ${m.rating}`;
+  document.getElementById('vb-syn').textContent=m.desc;
+  const bp=document.getElementById('vb-poster');
+  if(m.imgSm){bp.src=m.imgSm;bp.style.display='block';}else bp.style.display='none';
   document.getElementById('vhs-flipper').classList.remove('flipped');
-  document.getElementById('vhs-hint').textContent = 'CLICK TO FLIP';
+  document.getElementById('vhs-hint').textContent='CLICK TO FLIP';
   document.getElementById('vhs-overlay').classList.add('active');
 }
-document.getElementById('vhs-overlay').addEventListener('click', e => {
-  if (e.target.id === 'vhs-watch' || e.target.id === 'vhs-putback') return;
-  if (!vhsOpen) return;
-  vhsFlipped = !vhsFlipped;
-  document.getElementById('vhs-flipper').classList.toggle('flipped', vhsFlipped);
-  document.getElementById('vhs-hint').textContent = vhsFlipped ? 'CLICK TO FLIP BACK' : 'CLICK TO FLIP';
+document.getElementById('vhs-overlay').addEventListener('click',e=>{
+  if(e.target.id==='vhs-watch'||e.target.id==='vhs-putback')return;
+  if(!vhsOpen)return;
+  vhsFlipped=!vhsFlipped;
+  document.getElementById('vhs-flipper').classList.toggle('flipped',vhsFlipped);
+  document.getElementById('vhs-hint').textContent=vhsFlipped?'CLICK TO FLIP BACK':'CLICK TO FLIP';
 });
-function closeVHS() { vhsOpen = false; document.getElementById('vhs-overlay').classList.remove('active'); }
-function watchMovie() {
-  if (!curMovie) return;
-  window.open(`https://www.google.com/search?q=watch+${encodeURIComponent(curMovie.title)}+streaming`, '_blank');
+function closeVHS(){vhsOpen=false;document.getElementById('vhs-overlay').classList.remove('active');}
+function watchMovie(){
+  if(!curMovie)return;
+  window.open(`https://www.google.com/search?q=watch+${encodeURIComponent(curMovie.title)}+streaming`,'_blank');
 }
-function tryInteract() { if (hitMovie && !vhsOpen) openVHS(hitMovie); }
+function tryInteract(){if(hitMovie&&!vhsOpen)openVHS(hitMovie);}
 
 // ═══ INPUT ═════════════════════════════════════════════
-const keys = {};
-document.addEventListener('keydown', e => {
-  keys[e.key.toLowerCase()] = true;
-  if ((e.key === 'e' || e.key === 'E') && !vhsOpen) tryInteract();
-  if (e.key === 'Escape' && vhsOpen) closeVHS();
-});
-document.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-let pointerLocked = false;
-canvas.addEventListener('click', () => {
-  if (vhsOpen || !document.getElementById('intro').classList.contains('out')) return;
-  canvas.requestPointerLock();
-});
-document.addEventListener('pointerlockchange', () => { pointerLocked = document.pointerLockElement === canvas; });
-document.addEventListener('mousemove', e => { if (pointerLocked && !vhsOpen) pAngle += e.movementX * 0.002; });
-
-const isMobile = 'ontouchstart' in window;
-if (isMobile) {
-  document.getElementById('joy-zone').style.display  = 'block';
-  document.getElementById('look-zone').style.display = 'block';
-  document.getElementById('controls').style.display  = 'none';
-}
-let joyOn = false, joyX = 0, joyY = 0;
-const jZ = document.getElementById('joy-zone'), jD = document.getElementById('joy-dot');
-jZ.addEventListener('touchstart', e => { joyOn = true; e.preventDefault(); }, { passive: false });
-jZ.addEventListener('touchend',   () => { joyOn = false; joyX = 0; joyY = 0; jD.style.transform = 'translate(-50%,-50%)'; });
-jZ.addEventListener('touchmove',  e => {
-  if (!joyOn) return; e.preventDefault();
-  const t = e.touches[0], r = jZ.getBoundingClientRect();
-  let dx = t.clientX - (r.left + r.width / 2), dy = t.clientY - (r.top + r.height * 0.65);
-  const dist = Math.sqrt(dx * dx + dy * dy), mx = 32;
-  if (dist > mx) { dx = dx / dist * mx; dy = dy / dist * mx; }
-  joyX = dx / mx; joyY = dy / mx;
-  jD.style.transform = `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`;
-}, { passive: false });
-let lkX = 0, lkOn = false;
-const lZ = document.getElementById('look-zone');
-lZ.addEventListener('touchstart', e => { lkOn = true; lkX = e.touches[0].clientX; e.preventDefault(); }, { passive: false });
-lZ.addEventListener('touchend',   () => lkOn = false);
-lZ.addEventListener('touchmove',  e => {
-  if (!lkOn) return; e.preventDefault();
-  pAngle += (e.touches[0].clientX - lkX) * 0.005; lkX = e.touches[0].clientX;
-}, { passive: false });
+const keys={};
+document.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if((e.key==='e'||e.key==='E')&&!vhsOpen)tryInteract();if(e.key==='Escape'&&vhsOpen)closeVHS();});
+document.addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+let pointerLocked=false;
+canvas.addEventListener('click',()=>{if(vhsOpen||!document.getElementById('intro').classList.contains('out'))return;canvas.requestPointerLock();});
+document.addEventListener('pointerlockchange',()=>{pointerLocked=document.pointerLockElement===canvas;});
+document.addEventListener('mousemove',e=>{if(pointerLocked&&!vhsOpen)pAngle+=e.movementX*0.002;});
+const isMobile='ontouchstart' in window;
+if(isMobile){document.getElementById('joy-zone').style.display='block';document.getElementById('look-zone').style.display='block';document.getElementById('controls').style.display='none';}
+let joyOn=false,joyX=0,joyY=0;
+const jZ=document.getElementById('joy-zone'),jD=document.getElementById('joy-dot');
+jZ.addEventListener('touchstart',e=>{joyOn=true;e.preventDefault();},{passive:false});
+jZ.addEventListener('touchend',()=>{joyOn=false;joyX=0;joyY=0;jD.style.transform='translate(-50%,-50%)';});
+jZ.addEventListener('touchmove',e=>{
+  if(!joyOn)return;e.preventDefault();
+  const t=e.touches[0],r=jZ.getBoundingClientRect();
+  let dx=t.clientX-(r.left+r.width/2),dy=t.clientY-(r.top+r.height*0.65);
+  const d=Math.sqrt(dx*dx+dy*dy),mx=32;if(d>mx){dx=dx/d*mx;dy=dy/d*mx;}
+  joyX=dx/mx;joyY=dy/mx;
+  jD.style.transform=`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`;
+},{passive:false});
+let lkX=0,lkOn=false;
+const lZ=document.getElementById('look-zone');
+lZ.addEventListener('touchstart',e=>{lkOn=true;lkX=e.touches[0].clientX;e.preventDefault();},{passive:false});
+lZ.addEventListener('touchend',()=>lkOn=false);
+lZ.addEventListener('touchmove',e=>{if(!lkOn)return;e.preventDefault();pAngle+=(e.touches[0].clientX-lkX)*0.005;lkX=e.touches[0].clientX;},{passive:false});
 
 // ═══ GAME LOOP ══════════════════════════════════════════
-let started = false;
-function loop() {
+let started=false;
+function loop(){
   requestAnimationFrame(loop);
-  if (!started || vhsOpen) return;
-  if (keys['w'] || keys['arrowup'])    move( Math.cos(pAngle) * SPD,  Math.sin(pAngle) * SPD);
-  if (keys['s'] || keys['arrowdown'])  move(-Math.cos(pAngle) * SPD, -Math.sin(pAngle) * SPD);
-  if (keys['a'] || keys['arrowleft'])  pAngle -= 0.032;
-  if (keys['d'] || keys['arrowright']) pAngle += 0.032;
-  if (joyOn) {
-    move(Math.cos(pAngle) * (-joyY) * SPD * 1.3, Math.sin(pAngle) * (-joyY) * SPD * 1.3);
-    pAngle += joyX * 0.04;
-  }
-  render(); minimap(); updateAisle(); updatePrompt();
+  if(!started||vhsOpen)return;
+  if(keys['w']||keys['arrowup'])   move(Math.cos(pAngle)*SPD,Math.sin(pAngle)*SPD);
+  if(keys['s']||keys['arrowdown']) move(-Math.cos(pAngle)*SPD,-Math.sin(pAngle)*SPD);
+  if(keys['a']||keys['arrowleft']) pAngle-=0.032;
+  if(keys['d']||keys['arrowright'])pAngle+=0.032;
+  if(joyOn){move(Math.cos(pAngle)*(-joyY)*SPD*1.3,Math.sin(pAngle)*(-joyY)*SPD*1.3);pAngle+=joyX*0.04;}
+  render();minimap();updateAisle();updatePrompt();
 }
 requestAnimationFrame(loop);
 
-function enterStore() {
+function enterStore(){
   document.getElementById('intro').classList.add('out');
-  setTimeout(() => { document.getElementById('intro').style.display = 'none'; started = true; }, 700);
-  if (!isMobile) canvas.requestPointerLock();
+  setTimeout(()=>{document.getElementById('intro').style.display='none';started=true;},700);
+  if(!isMobile)canvas.requestPointerLock();
 }
-window.addEventListener('resize', () => { W = window.innerWidth; H = window.innerHeight; canvas.width = W; canvas.height = H; });
+window.addEventListener('resize',()=>{W=window.innerWidth;H=window.innerHeight;canvas.width=W;canvas.height=H;});
 
 // ═══ INIT ═══════════════════════════════════════════════
-async function init() {
-  const bar    = document.getElementById('ld-bar');
-  const status = document.getElementById('ld-status');
-  const retry  = document.getElementById('ld-retry');
-  retry.style.display = 'none';
-  bar.style.width = '0%';
-  let anyFailed = false;
-  for (let i = 0; i < GENRES.length; i++) {
-    status.textContent = `Loading ${GENRES[i].label}...`;
-    try { await fetchGenre(GENRES[i], i); }
-    catch(e) { console.warn('Failed:', GENRES[i].label, e); anyFailed = true; }
-    bar.style.width = `${Math.round((i + 1) / GENRES.length * 100)}%`;
+async function init(){
+  const bar=document.getElementById('ld-bar'),status=document.getElementById('ld-status');
+  const retry=document.getElementById('ld-retry');
+  retry.style.display='none'; bar.style.width='0%';
+  let failed=false;
+  for(let i=0;i<GENRES.length;i++){
+    status.textContent=`Loading ${GENRES[i].label}...`;
+    try{await fetchGenre(GENRES[i],i);}
+    catch(e){console.warn('fetch fail',i,e);failed=true;}
+    bar.style.width=`${Math.round((i+1)/GENRES.length*100)}%`;
   }
-  if (anyFailed && MOVIES.every(row => row.every(m => !m))) {
-    status.textContent = 'Could not connect. Check your internet and retry.';
-    retry.style.display = 'block';
-    return;
+  if(failed&&GENRE_POOLS.every(p=>p.length===0)){
+    status.textContent='Connection failed. Check internet and retry.';
+    retry.style.display='block'; return;
   }
-  status.textContent = 'Ready!';
-  await new Promise(r => setTimeout(r, 300));
+  // Assign all movies to shelf positions — runs once, guarantees no duplicates
+  assignMoviesToShelves();
+  status.textContent='Ready!';
+  await new Promise(r=>setTimeout(r,300));
   document.getElementById('loading').classList.add('out');
-  setTimeout(() => {
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('intro').style.display   = 'flex';
-  }, 600);
+  setTimeout(()=>{document.getElementById('loading').style.display='none';document.getElementById('intro').style.display='flex';},600);
 }
 init();
 </script>
