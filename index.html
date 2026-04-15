@@ -8,164 +8,165 @@
   @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=VT323&family=Barlow:ital,wght@0,400;0,600;1,400&display=swap');
   *{margin:0;padding:0;box-sizing:border-box;}
   body{background:#000;overflow:hidden;width:100vw;height:100vh;font-family:'Barlow',sans-serif;touch-action:none;}
-  #canvas{display:block;width:100vw;height:100vh;}
+  #c{display:block;width:100vw;height:100vh;}
   #hud{position:fixed;inset:0;pointer-events:none;z-index:10;}
-  #store-sign{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:#FFD700;color:#1a1a1a;font-family:'Bebas Neue',cursive;font-size:24px;letter-spacing:4px;padding:5px 24px 3px;border-radius:2px;box-shadow:0 0 24px rgba(255,215,0,0.7);border:3px solid #b8860b;white-space:nowrap;}
-  #store-sign span{color:#1565C0;}
-  #crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:16px;height:16px;transition:opacity 0.2s;}
-  #crosshair::before,#crosshair::after{content:'';position:absolute;background:rgba(255,255,255,0.9);}
-  #crosshair::before{width:2px;height:100%;left:50%;transform:translateX(-50%);}
-  #crosshair::after{height:2px;width:100%;top:50%;transform:translateY(-50%);}
-  #crosshair.dim{opacity:0.2;}
-  #aisle-label{position:absolute;top:62px;left:50%;transform:translateX(-50%);font-family:'VT323',monospace;font-size:20px;color:#FFD700;letter-spacing:3px;opacity:0;transition:opacity 0.35s;white-space:nowrap;background:rgba(0,0,0,0.45);padding:3px 12px;border-radius:3px;}
-  #aisle-label.show{opacity:1;}
-  #pickup-prompt{position:absolute;bottom:88px;left:50%;transform:translateX(-50%);font-family:'VT323',monospace;font-size:17px;color:#FFD700;letter-spacing:2px;opacity:0;transition:opacity 0.2s;background:rgba(0,0,0,0.55);padding:4px 14px;border-radius:4px;white-space:nowrap;}
-  #pickup-prompt.show{opacity:1;}
-  #controls{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);display:flex;gap:7px;}
+  #sign{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:#FFD700;color:#1a1a1a;font-family:'Bebas Neue',cursive;font-size:24px;letter-spacing:4px;padding:5px 24px 3px;border-radius:2px;box-shadow:0 0 24px rgba(255,215,0,0.7);border:3px solid #b8860b;white-space:nowrap;}
+  #sign span{color:#1565C0;}
+  #xhair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:16px;height:16px;transition:opacity 0.2s;}
+  #xhair::before,#xhair::after{content:'';position:absolute;background:rgba(255,255,255,0.9);}
+  #xhair::before{width:2px;height:100%;left:50%;transform:translateX(-50%);}
+  #xhair::after{height:2px;width:100%;top:50%;transform:translateY(-50%);}
+  #xhair.dim{opacity:0.2;}
+  #where{position:absolute;top:62px;left:50%;transform:translateX(-50%);font-family:'VT323',monospace;font-size:20px;color:#FFD700;letter-spacing:3px;opacity:0;transition:opacity 0.3s;white-space:nowrap;background:rgba(0,0,0,0.45);padding:3px 12px;border-radius:3px;}
+  #where.show{opacity:1;}
+  #pick{position:absolute;bottom:88px;left:50%;transform:translateX(-50%);font-family:'VT323',monospace;font-size:17px;color:#FFD700;letter-spacing:2px;opacity:0;transition:opacity 0.2s;background:rgba(0,0,0,0.55);padding:4px 14px;border-radius:4px;white-space:nowrap;}
+  #pick.show{opacity:1;}
+  #ctrls{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);display:flex;gap:7px;}
   .ck{background:rgba(0,0,0,0.78);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:4px 11px;font-size:10px;color:rgba(255,255,255,0.6);letter-spacing:1px;white-space:nowrap;}
-  .ck strong{color:#FFD700;font-family:'VT323',monospace;font-size:13px;}
-  #vhs-overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.88);}
-  #vhs-overlay.active{display:flex;}
-  #vhs-scene{position:relative;width:260px;height:420px;perspective:700px;cursor:pointer;}
-  #vhs-flipper{width:100%;height:100%;position:relative;transform-style:preserve-3d;transition:transform 0.65s cubic-bezier(0.4,0,0.2,1);}
-  #vhs-flipper.flipped{transform:rotateY(180deg);}
-  .vhs-face{position:absolute;inset:0;backface-visibility:hidden;border-radius:4px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.95),0 0 0 1px rgba(255,255,255,0.1);}
-  #vhs-front{background:#111;}
-  #vhs-fi{width:100%;height:100%;object-fit:cover;display:block;}
-  #vhs-ff{width:100%;height:100%;display:none;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#111,#1a1a2e);}
-  #vhs-back{background:#12121e;transform:rotateY(180deg);display:flex;flex-direction:column;}
-  #vb-hdr{padding:14px 14px 8px;border-bottom:2px solid rgba(255,215,0,0.25);}
-  #vb-title{font-family:'Bebas Neue',cursive;font-size:22px;color:#FFD700;letter-spacing:2px;line-height:1.1;}
-  #vb-meta{font-size:10px;color:rgba(255,255,255,0.45);margin-top:3px;}
-  #vb-tags{display:flex;gap:5px;margin-top:7px;}
-  .vtag{font-size:8px;padding:2px 7px;border-radius:3px;letter-spacing:1px;text-transform:uppercase;font-weight:700;}
-  .vtag.g{color:#fff;}.vtag.r{background:#FFD700;color:#111;}
-  #vb-body{padding:12px 14px;flex:1;overflow:hidden;}
+  .ck b{color:#FFD700;font-family:'VT323',monospace;font-size:13px;}
+  /* VHS flip */
+  #vhs-ov{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.88);}
+  #vhs-ov.on{display:flex;}
+  #vhs-sc{position:relative;width:260px;height:420px;perspective:700px;cursor:pointer;}
+  #vhs-fl{width:100%;height:100%;position:relative;transform-style:preserve-3d;transition:transform 0.65s cubic-bezier(0.4,0,0.2,1);}
+  #vhs-fl.flip{transform:rotateY(180deg);}
+  .vf{position:absolute;inset:0;backface-visibility:hidden;border-radius:4px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.95),0 0 0 1px rgba(255,255,255,0.1);}
+  #vf-fr{background:#111;}
+  #vf-img{width:100%;height:100%;object-fit:cover;display:block;}
+  #vf-fb{width:100%;height:100%;display:none;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#111,#1a1a2e);}
+  #vf-bk{background:#12121e;transform:rotateY(180deg);display:flex;flex-direction:column;}
+  #vb-h{padding:14px 14px 8px;border-bottom:2px solid rgba(255,215,0,0.25);}
+  #vb-ti{font-family:'Bebas Neue',cursive;font-size:22px;color:#FFD700;letter-spacing:2px;line-height:1.1;}
+  #vb-me{font-size:10px;color:rgba(255,255,255,0.45);margin-top:3px;}
+  #vb-tg{display:flex;gap:5px;margin-top:7px;}
+  .vt{font-size:8px;padding:2px 7px;border-radius:3px;letter-spacing:1px;text-transform:uppercase;font-weight:700;}
+  .vt.g{color:#fff;}.vt.r{background:#FFD700;color:#111;}
+  #vb-bd{padding:12px 14px;flex:1;overflow:hidden;}
   #vb-sl{font-family:'Bebas Neue',cursive;font-size:11px;color:rgba(255,255,255,0.28);letter-spacing:3px;margin-bottom:5px;}
-  #vb-syn{font-size:12px;color:rgba(255,255,255,0.8);line-height:1.55;font-style:italic;}
-  #vb-poster{width:75px;height:110px;object-fit:cover;border-radius:3px;float:right;margin:0 0 8px 10px;}
-  #vb-ftr{padding:8px 14px 12px;border-top:1px solid rgba(255,255,255,0.07);display:flex;gap:7px;}
-  #vhs-watch{flex:1;background:#FFD700;color:#111;border:none;font-family:'Bebas Neue',cursive;font-size:17px;letter-spacing:2px;padding:9px;border-radius:4px;cursor:pointer;pointer-events:all;}
-  #vhs-watch:hover{background:#ffe84d;}
-  #vhs-putback{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.65);border:1px solid rgba(255,255,255,0.18);font-family:'Bebas Neue',cursive;font-size:17px;padding:9px 14px;border-radius:4px;cursor:pointer;pointer-events:all;}
-  #vhs-hint{position:absolute;bottom:-28px;left:50%;transform:translateX(-50%);font-family:'VT323',monospace;font-size:13px;color:rgba(255,255,255,0.35);letter-spacing:2px;white-space:nowrap;}
-  #loading{position:fixed;inset:0;background:#000;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.6s;}
-  #loading.out{opacity:0;pointer-events:none;}
-  #ld-logo{font-family:'Bebas Neue',cursive;font-size:clamp(38px,9vw,66px);letter-spacing:6px;color:#FFD700;text-shadow:0 0 30px rgba(255,215,0,0.4);margin-bottom:6px;}
-  #ld-logo span{color:#1565C0;}
-  #ld-sub{font-family:'VT323',monospace;font-size:15px;color:rgba(255,255,255,0.4);letter-spacing:3px;margin-bottom:24px;}
-  #ld-bar-wrap{width:210px;height:5px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden;}
-  #ld-bar{height:100%;width:0%;background:#FFD700;border-radius:3px;transition:width 0.25s;}
-  #ld-status{font-size:10px;color:rgba(255,255,255,0.28);margin-top:9px;letter-spacing:1px;}
-  #ld-retry{margin-top:16px;background:transparent;border:1px solid rgba(255,215,0,0.5);color:#FFD700;font-family:'Bebas Neue',cursive;font-size:16px;letter-spacing:2px;padding:7px 20px;border-radius:4px;cursor:pointer;display:none;}
+  #vb-sy{font-size:12px;color:rgba(255,255,255,0.8);line-height:1.55;font-style:italic;}
+  #vb-po{width:75px;height:110px;object-fit:cover;border-radius:3px;float:right;margin:0 0 8px 10px;}
+  #vb-ft{padding:8px 14px 12px;border-top:1px solid rgba(255,255,255,0.07);display:flex;gap:7px;}
+  #vb-wa{flex:1;background:#FFD700;color:#111;border:none;font-family:'Bebas Neue',cursive;font-size:17px;letter-spacing:2px;padding:9px;border-radius:4px;cursor:pointer;pointer-events:all;}
+  #vb-wa:hover{background:#ffe84d;}
+  #vb-pu{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.65);border:1px solid rgba(255,255,255,0.18);font-family:'Bebas Neue',cursive;font-size:17px;padding:9px 14px;border-radius:4px;cursor:pointer;pointer-events:all;}
+  #vhs-hi{position:absolute;bottom:-28px;left:50%;transform:translateX(-50%);font-family:'VT323',monospace;font-size:13px;color:rgba(255,255,255,0.35);letter-spacing:2px;white-space:nowrap;}
+  /* Loading */
+  #ld{position:fixed;inset:0;background:#000;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.6s;}
+  #ld.out{opacity:0;pointer-events:none;}
+  #ld-lo{font-family:'Bebas Neue',cursive;font-size:clamp(38px,9vw,66px);letter-spacing:6px;color:#FFD700;text-shadow:0 0 30px rgba(255,215,0,0.4);margin-bottom:6px;}
+  #ld-lo span{color:#1565C0;}
+  #ld-su{font-family:'VT323',monospace;font-size:15px;color:rgba(255,255,255,0.4);letter-spacing:3px;margin-bottom:24px;}
+  #ld-bw{width:210px;height:5px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden;}
+  #ld-br{height:100%;width:0%;background:#FFD700;border-radius:3px;transition:width 0.25s;}
+  #ld-st{font-size:10px;color:rgba(255,255,255,0.28);margin-top:9px;letter-spacing:1px;}
+  #ld-re{margin-top:16px;background:transparent;border:1px solid rgba(255,215,0,0.5);color:#FFD700;font-family:'Bebas Neue',cursive;font-size:16px;letter-spacing:2px;padding:7px 20px;border-radius:4px;cursor:pointer;display:none;}
+  /* Intro */
   #intro{position:fixed;inset:0;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;transition:opacity 0.7s;}
   #intro.out{opacity:0;pointer-events:none;}
-  #intro-logo{font-family:'Bebas Neue',cursive;font-size:clamp(44px,11vw,76px);letter-spacing:6px;color:#FFD700;text-shadow:0 0 40px rgba(255,215,0,0.45);margin-bottom:4px;}
-  #intro-logo span{color:#1565C0;}
-  #intro-sub{font-family:'VT323',monospace;font-size:17px;color:rgba(255,255,255,0.5);letter-spacing:4px;margin-bottom:42px;}
-  #intro-btn{background:#FFD700;color:#111;border:none;font-family:'Bebas Neue',cursive;font-size:23px;letter-spacing:4px;padding:12px 42px;border-radius:4px;cursor:pointer;box-shadow:0 0 28px rgba(255,215,0,0.3);}
-  #intro-tag{font-size:11px;color:rgba(255,255,255,0.28);margin-top:16px;letter-spacing:2px;}
-  #joy-zone{position:absolute;left:0;bottom:0;width:50%;height:44%;pointer-events:all;display:none;}
-  #look-zone{position:absolute;right:0;bottom:0;width:50%;height:44%;pointer-events:all;display:none;}
-  #joy-pad{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);width:74px;height:74px;border-radius:50%;border:2px solid rgba(255,215,0,0.35);background:rgba(255,215,0,0.07);}
-  #joy-dot{position:absolute;width:26px;height:26px;border-radius:50%;background:rgba(255,215,0,0.55);top:50%;left:50%;transform:translate(-50%,-50%);}
-  #e-btn{position:absolute;right:18px;bottom:74px;width:54px;height:54px;border-radius:50%;background:rgba(255,215,0,0.12);border:2px solid rgba(255,215,0,0.45);color:#FFD700;font-family:'Bebas Neue',cursive;font-size:20px;display:none;align-items:center;justify-content:center;pointer-events:all;cursor:pointer;}
+  #in-lo{font-family:'Bebas Neue',cursive;font-size:clamp(44px,11vw,76px);letter-spacing:6px;color:#FFD700;text-shadow:0 0 40px rgba(255,215,0,0.45);margin-bottom:4px;}
+  #in-lo span{color:#1565C0;}
+  #in-su{font-family:'VT323',monospace;font-size:17px;color:rgba(255,255,255,0.5);letter-spacing:4px;margin-bottom:42px;}
+  #in-bt{background:#FFD700;color:#111;border:none;font-family:'Bebas Neue',cursive;font-size:23px;letter-spacing:4px;padding:12px 42px;border-radius:4px;cursor:pointer;box-shadow:0 0 28px rgba(255,215,0,0.3);}
+  #in-tg{font-size:11px;color:rgba(255,255,255,0.28);margin-top:16px;letter-spacing:2px;}
+  /* Mobile */
+  #jz{position:absolute;left:0;bottom:0;width:50%;height:44%;pointer-events:all;display:none;}
+  #lz{position:absolute;right:0;bottom:0;width:50%;height:44%;pointer-events:all;display:none;}
+  #jp{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);width:74px;height:74px;border-radius:50%;border:2px solid rgba(255,215,0,0.35);background:rgba(255,215,0,0.07);}
+  #jd{position:absolute;width:26px;height:26px;border-radius:50%;background:rgba(255,215,0,0.55);top:50%;left:50%;transform:translate(-50%,-50%);}
+  #eb{position:absolute;right:18px;bottom:74px;width:54px;height:54px;border-radius:50%;background:rgba(255,215,0,0.12);border:2px solid rgba(255,215,0,0.45);color:#FFD700;font-family:'Bebas Neue',cursive;font-size:20px;display:none;align-items:center;justify-content:center;pointer-events:all;cursor:pointer;}
 </style>
 </head>
 <body>
-<div id="loading">
-  <div id="ld-logo">BLOCK<span>BROWSER</span></div>
-  <div id="ld-sub">STOCKING THE SHELVES...</div>
-  <div id="ld-bar-wrap"><div id="ld-bar"></div></div>
-  <div id="ld-status">Connecting...</div>
-  <button id="ld-retry" onclick="init()">RETRY</button>
+<div id="ld">
+  <div id="ld-lo">BLOCK<span>BROWSER</span></div>
+  <div id="ld-su">STOCKING THE SHELVES...</div>
+  <div id="ld-bw"><div id="ld-br"></div></div>
+  <div id="ld-st">Connecting...</div>
+  <button id="ld-re" onclick="init()">RETRY</button>
 </div>
 <div id="intro" style="display:none">
-  <div id="intro-logo">BLOCK<span>BROWSER</span></div>
-  <div id="intro-sub">YOUR STREAMING STORE IS OPEN</div>
-  <button id="intro-btn" onclick="enterStore()">WALK IN</button>
-  <div id="intro-tag">Be kind, rewind.</div>
+  <div id="in-lo">BLOCK<span>BROWSER</span></div>
+  <div id="in-su">YOUR STREAMING STORE IS OPEN</div>
+  <button id="in-bt" onclick="enterStore()">WALK IN</button>
+  <div id="in-tg">Be kind, rewind.</div>
 </div>
-<canvas id="canvas"></canvas>
+<canvas id="c"></canvas>
 <div id="hud">
-  <div id="store-sign">BLOCK<span>BROWSER</span></div>
-  <div id="aisle-label"></div>
-  <div id="crosshair"></div>
-  <div id="pickup-prompt">[ E ] PICK UP</div>
-  <div id="controls">
-    <div class="ck"><strong>W A S D</strong> Move</div>
-    <div class="ck"><strong>Mouse</strong> Look</div>
-    <div class="ck"><strong>E</strong> Pick Up</div>
-    <div class="ck"><strong>ESC</strong> Unlock</div>
+  <div id="sign">BLOCK<span>BROWSER</span></div>
+  <div id="where"></div>
+  <div id="xhair"></div>
+  <div id="pick">[ E ] PICK UP</div>
+  <div id="ctrls">
+    <div class="ck"><b>W A S D</b> Move</div>
+    <div class="ck"><b>Mouse</b> Look</div>
+    <div class="ck"><b>E</b> Pick Up</div>
+    <div class="ck"><b>ESC</b> Unlock</div>
   </div>
-  <div id="joy-zone"><div id="joy-pad"><div id="joy-dot"></div></div></div>
-  <div id="look-zone"></div>
-  <div id="e-btn" onclick="tryInteract()">E</div>
+  <div id="jz"><div id="jp"><div id="jd"></div></div></div>
+  <div id="lz"></div>
+  <div id="eb" onclick="tryPickup()">E</div>
 </div>
-<div id="vhs-overlay">
-  <div id="vhs-scene">
-    <div id="vhs-flipper">
-      <div class="vhs-face" id="vhs-front">
-        <img id="vhs-fi" alt="" crossorigin="anonymous">
-        <div id="vhs-ff">
+<div id="vhs-ov">
+  <div id="vhs-sc">
+    <div id="vhs-fl">
+      <div class="vf" id="vf-fr">
+        <img id="vf-img" alt="" crossorigin="anonymous">
+        <div id="vf-fb">
           <div style="font-size:64px;margin-bottom:10px">🎬</div>
-          <div id="vhs-ft" style="font-family:'Bebas Neue',cursive;font-size:24px;color:#FFD700;letter-spacing:2px;text-align:center;padding:0 16px"></div>
+          <div id="vf-ft" style="font-family:'Bebas Neue',cursive;font-size:24px;color:#FFD700;letter-spacing:2px;text-align:center;padding:0 16px"></div>
         </div>
       </div>
-      <div class="vhs-face" id="vhs-back">
-        <div id="vb-hdr">
-          <div id="vb-title">Title</div>
-          <div id="vb-meta">Year</div>
-          <div id="vb-tags"><span class="vtag g" id="vb-genre">Genre</span><span class="vtag r" id="vb-rating">★ 0.0</span></div>
+      <div class="vf" id="vf-bk">
+        <div id="vb-h">
+          <div id="vb-ti">Title</div>
+          <div id="vb-me">Year</div>
+          <div id="vb-tg"><span class="vt g" id="vb-ge">Genre</span><span class="vt r" id="vb-ra">★ 0.0</span></div>
         </div>
-        <div id="vb-body">
-          <img id="vb-poster" alt="" crossorigin="anonymous">
+        <div id="vb-bd">
+          <img id="vb-po" alt="" crossorigin="anonymous">
           <div id="vb-sl">SYNOPSIS</div>
-          <div id="vb-syn">...</div>
+          <div id="vb-sy">...</div>
         </div>
-        <div id="vb-ftr">
-          <button id="vhs-watch" onclick="watchMovie()">&#9654; WATCH TONIGHT</button>
-          <button id="vhs-putback" onclick="closeVHS()">PUT BACK</button>
+        <div id="vb-ft">
+          <button id="vb-wa" onclick="watchMovie()">&#9654; WATCH TONIGHT</button>
+          <button id="vb-pu" onclick="closeVHS()">PUT BACK</button>
         </div>
       </div>
     </div>
-    <div id="vhs-hint">CLICK TO FLIP</div>
+    <div id="vhs-hi">CLICK TO FLIP</div>
   </div>
 </div>
 <script>
 'use strict';
 
-// ═══════════════════════════════════════════════
-// TMDB
-// ═══════════════════════════════════════════════
+// ═══ TMDB ════════════════════════════════════════════
 const TMDB_KEY  = '03549aee0d249c4c994eaf6f2f579cf2';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const IMG_SM    = 'https://image.tmdb.org/t/p/w154';
 const IMG_LG    = 'https://image.tmdb.org/t/p/w342';
 
 const GENRES = [
-  { label:'NEW RELEASES', color:'#cc2200', lt:'now_playing', gid:null },
-  { label:'ACTION',       color:'#cc4400', lt:'genre',       gid:28   },
-  { label:'COMEDY',       color:'#0077bb', lt:'genre',       gid:35   },
-  { label:'HORROR',       color:'#660099', lt:'genre',       gid:27   },
-  { label:'DRAMA',        color:'#006633', lt:'genre',       gid:18   },
-  { label:'SCI-FI',       color:'#990066', lt:'genre',       gid:878  },
+  {label:'NEW RELEASES',color:'#cc2200',lt:'now_playing',gid:null},
+  {label:'ACTION',      color:'#cc4400',lt:'genre',      gid:28},
+  {label:'COMEDY',      color:'#0077bb',lt:'genre',      gid:35},
+  {label:'HORROR',      color:'#660099',lt:'genre',      gid:27},
+  {label:'DRAMA',       color:'#006633',lt:'genre',      gid:18},
+  {label:'SCI-FI',      color:'#990066',lt:'genre',      gid:878},
+  {label:'THRILLER',    color:'#884400',lt:'genre',      gid:53},
+  {label:'ANIMATION',   color:'#006688',lt:'genre',      gid:16},
 ];
+const NG = GENRES.length;
 
-const POOL = GENRES.map(()=>[]); // POOL[gi] = array of movie objects
-
-const imgStore = new Map(); // url → {img, ok}
-function getImgEntry(url){
-  if(!url)return null;
-  if(!imgStore.has(url))imgStore.set(url,{img:null,ok:false});
-  return imgStore.get(url);
-}
-function requestLoad(url){
-  if(!url)return;
-  const e=getImgEntry(url); if(e.img)return;
-  const i=new Image(); i.crossOrigin='anonymous';
-  i.onload=()=>{ e.ok=true; spriteCache.clear(); };
-  i.onerror=()=>{}; i.src=url; e.img=i;
+// POOL[gi] = array of movie objects for that genre
+const POOL = GENRES.map(()=>[]);
+// Image cache: url → {img:HTMLImageElement|null, ok:bool}
+const IC = new Map();
+function ice(url){if(!url)return null;if(!IC.has(url))IC.set(url,{img:null,ok:false});return IC.get(url);}
+function loadImg(url){
+  if(!url)return; const e=ice(url); if(e.img)return;
+  const i=new Image();i.crossOrigin='anonymous';
+  i.onload=()=>{e.ok=true;CC.clear();};i.onerror=()=>{};
+  i.src=url;e.img=i;
 }
 
 async function fetchGenre(g,idx){
@@ -179,152 +180,131 @@ async function fetchGenre(g,idx){
   const [d1,d2]=await Promise.all([r1.json(),r2.json()]);
   const seen=new Set();
   POOL[idx]=[...(d1.results||[]),...(d2.results||[])].filter(m=>{
-    if(seen.has(m.id))return false; seen.add(m.id); return true;
+    if(seen.has(m.id))return false;seen.add(m.id);return true;
   }).map(m=>({
-    id:m.id, title:m.title||'?',
+    id:m.id,title:m.title||'?',
     year:(m.release_date||'').slice(0,4)||'—',
-    genre:g.label, genreColor:g.color,
+    genre:g.label,genreColor:g.color,
     rating:m.vote_average?m.vote_average.toFixed(1):'—',
     desc:m.overview?(m.overview.slice(0,200)+(m.overview.length>200?'…':'')):' ',
     imgSm:m.poster_path?(IMG_SM+m.poster_path):null,
     imgLg:m.poster_path?(IMG_LG+m.poster_path):null,
     hue:(m.id*53)%360,
   }));
-  POOL[idx].forEach(m=>{ if(m.imgSm)getImgEntry(m.imgSm); });
+  POOL[idx].forEach(m=>{if(m.imgSm)ice(m.imgSm);});
 }
 
-// ═══════════════════════════════════════════════
-// MAP
-// 22 wide × 28 deep
-// Shelf rows at y = 4, 7, 10, 13, 16, 19
-// Each shelf is 1 unit deep, 2-unit walkways between
-// Player walks south (increasing Y), store runs east-west
-// ═══════════════════════════════════════════════
-const MW=22, MH=28;
-const RAW=[
-  '1111111111111111111111', // 0
-  '1000000000000000000001', // 1 entrance
-  '1000000000000000000001', // 2
-  '1000000000000000000001', // 3
-  '1222222222222222222221', // 4  SHELF 0 — NEW RELEASES
-  '1000000000000000000001', // 5
-  '1000000000000000000001', // 6
-  '1222222222222222222221', // 7  SHELF 1 — ACTION
-  '1000000000000000000001', // 8
-  '1000000000000000000001', // 9
-  '1222222222222222222221', // 10 SHELF 2 — COMEDY
-  '1000000000000000000001', // 11
-  '1000000000000000000001', // 12
-  '1222222222222222222221', // 13 SHELF 3 — HORROR
-  '1000000000000000000001', // 14
-  '1000000000000000000001', // 15
-  '1222222222222222222221', // 16 SHELF 4 — DRAMA
-  '1000000000000000000001', // 17
-  '1000000000000000000001', // 18
-  '1222222222222222222221', // 19 SHELF 5 — SCI-FI
-  '1000000000000000000001', // 20
-  '1000000000000000000001', // 21
-  '1555555555555555555551', // 22 back wall
-  '1555555555555555555551', // 23
-  '1555555555555555555551', // 24
-  '1000000000000000000001', // 25
-  '1000000000000000000001', // 26
-  '1111111111111111111111', // 27
-];
-const MAP=RAW.map(r=>r.split('').map(Number));
-function mapAt(x,y){ const mx=Math.floor(x),my=Math.floor(y); if(mx<0||mx>=MW||my<0||my>=MH)return 1; return MAP[my][mx]; }
-function solid(x,y){ return mapAt(x,y)!==0; }
+// ═══ MAP ═════════════════════════════════════════════
+// Store layout (40 wide × 36 deep):
+// - Perimeter walls covered in boxes
+// - 3 double-sided aisle shelf units running east-west
+// - Wide entrance at south, walkways between aisles
+//
+// Cell types:
+//   0 = floor (walkable)
+//   1 = outer wall (yellow Blockbuster wall, covered in boxes)
+//   2 = aisle shelf (dark wood, covered in boxes, walkable on both sides)
+//   3 = checkout counter
+//
+// Genre assignment per wall section:
+//   North wall (y=0):        GENRES 0,1 (New Releases, Action)
+//   East wall (x=MW-1):      GENRES 2,3 (Comedy, Horror)
+//   West wall (x=0):         GENRES 4,5 (Drama, Sci-Fi)
+//   Aisle 1 (y=10):          GENRES 6   (Thriller) both sides
+//   Aisle 2 (y=18):          GENRES 7   (Animation) both sides
+//   Aisle 3 (y=26):          GENRES 0   (New Releases overflow)
 
-// Which genre index each shelf row belongs to
-const SHELF_ROWS = [4,7,10,13,16,19]; // map Y of each shelf
-const BACK_WALL_ROWS = [22,23,24];
+const MW=40, MH=36;
+// Build map programmatically
+const MAP=(()=>{
+  const m=Array.from({length:MH},()=>new Array(MW).fill(0));
+  // Outer walls
+  for(let x=0;x<MW;x++){m[0][x]=1;m[MH-1][x]=1;}
+  for(let y=0;y<MH;y++){m[y][0]=1;m[y][MW-1]=1;}
+  // Checkout counter near entrance (south area)
+  for(let x=12;x<=18;x++) m[MH-4][x]=3;
+  for(let x=22;x<=28;x++) m[MH-4][x]=3;
+  // Aisle shelves — 2 cells deep, full width minus 4 cells gap on each side
+  // Aisle 1
+  for(let x=4;x<=MW-5;x++){m[10][x]=2;m[11][x]=2;}
+  // Aisle 2
+  for(let x=4;x<=MW-5;x++){m[18][x]=2;m[19][x]=2;}
+  // Aisle 3
+  for(let x=4;x<=MW-5;x++){m[26][x]=2;m[27][x]=2;}
+  return m;
+})();
 
-function genreForY(mapY){
-  const idx=SHELF_ROWS.indexOf(mapY);
-  if(idx>=0)return idx;
-  if(BACK_WALL_ROWS.includes(mapY))return 0; // back wall = new releases overflow
+function mapAt(x,y){
+  const mx=Math.floor(x),my=Math.floor(y);
+  if(mx<0||mx>=MW||my<0||my>=MH)return 1;
+  return MAP[my][mx];
+}
+function solid(x,y){const c=mapAt(x,y);return c!==0;}
+
+// ═══ GENRE ASSIGNMENT PER WALL ════════════════════════
+// Each wall cell has a genre index that determines which movies are shown
+// wallGenre(cell, mapX, mapY) → genre index
+
+function wallGenre(cell, mx, my){
+  if(cell===1){
+    // North wall
+    if(my===0)    return mx<MW/2 ? 0 : 1;
+    // South wall
+    if(my===MH-1) return mx<MW/2 ? 2 : 3;
+    // West wall
+    if(mx===0)    return my<MH/2 ? 4 : 5;
+    // East wall
+    if(mx===MW-1) return my<MH/2 ? 6 : 7;
+  }
+  if(cell===2){
+    // Aisle shelves — determined by which aisle row
+    if(my===10||my===11) return 0;
+    if(my===18||my===19) return 1;
+    if(my===26||my===27) return 2;
+  }
   return 0;
 }
 
-// ═══════════════════════════════════════════════
-// VHS SPRITE SYSTEM
-// Each sprite = one VHS box at a fixed world position
-// wx = world X, wy = world Y (against the shelf wall)
-// shelf row = which shelf it sits on
-// vrow = vertical row index (0=bottom, N=top) — stacked rows on the shelf
-// ═══════════════════════════════════════════════
+// ═══ BOX LAYOUT ══════════════════════════════════════
+// Same approach as proof of concept:
+// boxes are fixed to wall, painted per raycaster column
 
-// Physical VHS dimensions in world units
-// A real VHS box: 190mm tall × 104mm wide
-// We represent: BOX_W=0.18 world units wide, BOX_H=0.33 world units tall
-const BOX_W  = 0.18;  // world width of one VHS box
-const BOX_H  = 0.33;  // world height
-const BOX_GAP = 0.005; // gap between boxes
+const BOX_W    = 0.13;
+const BOX_GAP  = 0.010;
+const BOX_SLOT = BOX_W + BOX_GAP;
+const BOX_ROWS = 5;
+const ROW_BOT  = [0.04, 0.23, 0.42, 0.61, 0.80];
+const ROW_H    = 0.17;
 
-// Shelf properties
-const SHELF_ROWS_VERTICAL = 6; // how many rows of boxes stacked on each shelf
-// Bottom of shelf at world height 0.05, top at 0.05 + SHELF_ROWS_VERTICAL*BOX_H
-const SHELF_BOTTOM = 0.05;
-
-// Build all sprites
-const sprites = []; // {wx, wy, worldH, gi, movie, imgLoaded}
-
-function buildSprites(){
-  // For each genre shelf row
-  for(let gi=0;gi<GENRES.length;gi++){
-    const shelfY = SHELF_ROWS[gi] + 0.5; // place sprites just in front of shelf wall
-    const pool   = POOL[gi];
-    let   poolIdx = 0;
-
-    // Place boxes across full shelf width (x=1..MW-2 = x=1..20)
-    const startX = 1.0 + BOX_GAP;
-    const totalW = (MW-2); // 20 world units
-
-    // How many boxes fit across?
-    const boxesPerRow = Math.floor(totalW / (BOX_W + BOX_GAP));
-
-    for(let vrow=0;vrow<SHELF_ROWS_VERTICAL;vrow++){
-      const worldH = SHELF_BOTTOM + vrow * (BOX_H + 0.01); // vertical position
-      for(let b=0;b<boxesPerRow;b++){
-        const wx = startX + b*(BOX_W+BOX_GAP) + BOX_W/2;
-        const movie = pool[poolIdx % pool.length];
-        poolIdx++;
-        if(movie){
-          sprites.push({ wx, wy:shelfY, worldH, gi, movie,
-            // Precomputed for sorting
-            dist:0, screenX:0, screenSz:0 });
-        }
-      }
-    }
-  }
-
-  // Back wall sprites (new releases overflow, facing north)
-  const bwPool = POOL[0]; // reuse genre 0
-  const bwY    = 22.5;
-  let bwIdx    = Math.min(40, bwPool.length); // start after first 40
-  const bwBoxesPerRow = Math.floor((MW-2)/(BOX_W+BOX_GAP));
-  for(let vrow=0;vrow<SHELF_ROWS_VERTICAL;vrow++){
-    const worldH=SHELF_BOTTOM+vrow*(BOX_H+0.01);
-    for(let b=0;b<bwBoxesPerRow;b++){
-      const wx=1.0+BOX_GAP+b*(BOX_W+BOX_GAP)+BOX_W/2;
-      const movie=bwPool[bwIdx%bwPool.length]; bwIdx++;
-      if(movie) sprites.push({wx,wy:bwY,worldH,gi:0,movie,dist:0,screenX:0,screenSz:0});
-    }
-  }
+// Get movie for a given wall position
+// wallAbsX = absolute world position along the wall
+// row = which vertical row (0=bottom)
+// gi = genre index
+function getMovieAt(wallAbsX, row, gi){
+  const pool = POOL[gi];
+  if(!pool||!pool.length) return null;
+  const slot = Math.floor(wallAbsX / BOX_SLOT);
+  const posInSlot = wallAbsX - slot*BOX_SLOT;
+  if(posInSlot > BOX_W) return null; // gap
+  // Unique index combining slot + row so no duplicates within a genre section
+  const idx = (row * 200 + slot) % pool.length;
+  return {movie: pool[idx], faceX: posInSlot/BOX_W};
 }
 
-// ═══════════════════════════════════════════════
-// SPRITE FACE CANVAS CACHE
-// Portrait VHS box: full poster art, top highlight, left spine
-// ═══════════════════════════════════════════════
-const spriteCache = new Map();
+// ═══ CANVAS CACHE ════════════════════════════════════
+// CC: caches single-pixel-wide vertical slices of box faces
+// Key: `${movieId}_${faceX2dp}_${yFrac2dp}_${loaded}`
+// We render slices on demand since each column needs one pixel width
+// For performance we cache the full box face as an offscreen canvas
+// then slice from it
 
-function getSpriteFace(movie, pw, ph){
-  // pw/ph = pixel width/height on screen
-  const e  = movie.imgSm ? imgStore.get(movie.imgSm) : null;
-  const ok = e && e.ok && e.img;
-  const key= `${movie.id}_${Math.ceil(pw)}_${Math.ceil(ph)}_${ok?1:0}`;
-  if(spriteCache.has(key))return spriteCache.get(key);
+const CC = new Map(); // movie face canvases: movieId_w_h_loaded → canvas
+
+function getBoxFaceCanvas(movie, pw, ph){
+  const e   = movie.imgSm ? IC.get(movie.imgSm) : null;
+  const ok  = e && e.ok && e.img;
+  const key = `${movie.id}_${Math.ceil(pw)}_${Math.ceil(ph)}_${ok?1:0}`;
+  if(CC.has(key)) return CC.get(key);
 
   const cw=Math.max(1,Math.ceil(pw)), ch=Math.max(1,Math.ceil(ph));
   const c=document.createElement('canvas'); c.width=cw; c.height=ch;
@@ -335,321 +315,287 @@ function getSpriteFace(movie, pw, ph){
   } else {
     x.fillStyle=`hsl(${movie.hue},50%,14%)`; x.fillRect(0,0,cw,ch);
     const g=x.createLinearGradient(0,0,0,ch);
-    g.addColorStop(0,'rgba(255,255,255,0.18)');
-    g.addColorStop(1,'rgba(0,0,0,0.55)');
+    g.addColorStop(0,'rgba(255,255,255,0.18)');g.addColorStop(1,'rgba(0,0,0,0.5)');
     x.fillStyle=g; x.fillRect(0,0,cw,ch);
-    if(e&&!e.img)requestLoad(movie.imgSm);
+    if(e&&!e.img) loadImg(movie.imgSm);
   }
 
-  // Top edge highlight
-  const tH=Math.max(2,ch*0.05);
+  // Top highlight
+  const tH=Math.max(2,ch*0.06);
   const tG=x.createLinearGradient(0,0,0,tH);
-  tG.addColorStop(0,'rgba(255,255,255,0.65)'); tG.addColorStop(1,'rgba(255,255,255,0)');
+  tG.addColorStop(0,'rgba(255,255,255,0.65)');tG.addColorStop(1,'rgba(255,255,255,0)');
   x.fillStyle=tG; x.fillRect(0,0,cw,tH);
 
   // Left spine shadow
-  const sW=Math.max(1,cw*0.08);
+  const sW=Math.max(2,cw*0.1);
   const sG=x.createLinearGradient(0,0,sW,0);
-  sG.addColorStop(0,'rgba(0,0,0,0.8)'); sG.addColorStop(1,'rgba(0,0,0,0)');
+  sG.addColorStop(0,'rgba(0,0,0,0.8)');sG.addColorStop(1,'rgba(0,0,0,0)');
   x.fillStyle=sG; x.fillRect(0,0,sW,ch);
 
-  // Right edge darkening
-  const rW=Math.max(1,cw*0.06);
+  // Right edge shadow
+  const rW=Math.max(1,cw*0.08);
   const rG=x.createLinearGradient(cw-rW,0,cw,0);
-  rG.addColorStop(0,'rgba(0,0,0,0)'); rG.addColorStop(1,'rgba(0,0,0,0.6)');
+  rG.addColorStop(0,'rgba(0,0,0,0)');rG.addColorStop(1,'rgba(0,0,0,0.65)');
   x.fillStyle=rG; x.fillRect(0,0,cw,ch);
 
-  // Title strip at bottom (when tall enough)
-  if(ch>22){
-    const sH=Math.max(4,Math.min(ch*0.18,14));
-    x.fillStyle='rgba(0,0,0,0.75)'; x.fillRect(0,ch-sH,cw,sH);
-    if(cw>16){
-      const fs=Math.max(3,Math.min(sH*0.55,cw*0.35,9));
-      x.fillStyle='rgba(255,215,0,0.95)';
-      x.font=`bold ${fs}px Arial`; x.textAlign='center'; x.textBaseline='middle';
-      x.fillText(movie.title.slice(0,Math.floor(cw/(fs*0.52))),cw/2,ch-sH/2);
-    }
-  }
+  // Bottom shadow
+  x.fillStyle='rgba(0,0,0,0.5)'; x.fillRect(0,ch-Math.max(2,ch*0.07),cw,Math.max(2,ch*0.07));
 
+  // Border
   x.strokeStyle='rgba(0,0,0,0.8)'; x.lineWidth=0.5; x.strokeRect(0.5,0.5,cw-1,ch-1);
 
-  spriteCache.set(key,c);
-  if(spriteCache.size>1200){const k=spriteCache.keys().next().value;spriteCache.delete(k);}
+  CC.set(key,c);
+  if(CC.size>800){const k=CC.keys().next().value;CC.delete(k);}
   return c;
 }
 
-// ═══════════════════════════════════════════════
-// GENRE SIGN CANVASES
-// ═══════════════════════════════════════════════
-const SIGN_W=320,SIGN_H=52;
-const signC=GENRES.map(g=>{
-  const c=document.createElement('canvas'); c.width=SIGN_W; c.height=SIGN_H;
-  const x=c.getContext('2d');
-  x.fillStyle=g.color; x.fillRect(0,0,SIGN_W,SIGN_H);
-  x.fillStyle='rgba(0,0,0,0.28)'; x.fillRect(0,SIGN_H-8,SIGN_W,8);
-  x.fillStyle='rgba(255,255,255,0.18)'; x.fillRect(0,0,SIGN_W,3);
-  x.fillStyle='rgba(0,0,0,0.88)';
-  x.font='bold 26px Arial Black,Arial'; x.textAlign='center'; x.textBaseline='middle';
-  x.fillText(g.label,SIGN_W/2,SIGN_H/2-1);
-  return c;
-});
-
-// ═══════════════════════════════════════════════
-// WALL TEXTURES (plain — boxes are sprites now)
-// ═══════════════════════════════════════════════
+// ═══ WALL TEXTURES ═══════════════════════════════════
 function mkt(fn,w=64,h=64){const c=document.createElement('canvas');c.width=w;c.height=h;fn(c.getContext('2d'),w,h);return c;}
 
 const T_WALL=mkt((x,w,h)=>{
-  x.fillStyle='#e8b800'; x.fillRect(0,0,w,h);
-  x.strokeStyle='rgba(0,0,0,0.06)'; x.lineWidth=1;
+  x.fillStyle='#e8b800';x.fillRect(0,0,w,h);
+  x.strokeStyle='rgba(0,0,0,0.06)';x.lineWidth=1;
   for(let i=0;i<h;i+=16){x.beginPath();x.moveTo(0,i);x.lineTo(w,i);x.stroke();}
 });
-
 const T_SHELF=mkt((x,w,h)=>{
-  // Plain dark wood — boxes will appear as sprites in front
-  x.fillStyle='#2a1605'; x.fillRect(0,0,w,h);
-  x.strokeStyle='rgba(255,255,255,0.06)'; x.lineWidth=1;
-  for(let i=8;i<w;i+=10){x.beginPath();x.moveTo(i,0);x.lineTo(i,h);x.stroke();}
+  x.fillStyle='#1a0e04';x.fillRect(0,0,w,h);
+  for(let row=0;row<BOX_ROWS;row++){
+    const y=Math.round((ROW_BOT[row]+ROW_H)*h);
+    x.fillStyle='rgba(120,80,25,0.9)';x.fillRect(0,y,w,3);
+    x.fillStyle='rgba(255,255,255,0.1)';x.fillRect(0,y+3,w,1);
+  }
+});
+const T_COUNTER=mkt((x,w,h)=>{
+  x.fillStyle='#2a1407';x.fillRect(0,0,w,h);
+  x.fillStyle='rgba(255,215,0,0.35)';x.fillRect(0,0,w,5);
+  x.strokeStyle='rgba(255,215,0,0.2)';x.lineWidth=1;
+  x.beginPath();x.moveTo(0,12);x.lineTo(w,12);x.stroke();
+});
+function wTex(c){
+  if(c===1)return T_WALL;
+  if(c===2)return T_SHELF;
+  if(c===3)return T_COUNTER;
+  return T_WALL;
+}
+
+// ═══ GENRE SIGN CANVASES ═════════════════════════════
+const SC=GENRES.map(g=>{
+  const c=document.createElement('canvas');c.width=320;c.height=52;
+  const x=c.getContext('2d');
+  x.fillStyle=g.color;x.fillRect(0,0,320,52);
+  x.fillStyle='rgba(0,0,0,0.28)';x.fillRect(0,44,320,8);
+  x.fillStyle='rgba(255,255,255,0.18)';x.fillRect(0,0,320,3);
+  x.fillStyle='rgba(0,0,0,0.88)';
+  x.font='bold 24px Arial Black,Arial';x.textAlign='center';x.textBaseline='middle';
+  x.fillText(g.label,160,24);
+  return c;
 });
 
-const T_BACK=mkt((x,w,h)=>{
-  x.fillStyle='#0c0c1e'; x.fillRect(0,0,w,h);
-});
+// ═══ PLAYER ══════════════════════════════════════════
+let px=MW/2, py=MH-3, pAngle=-Math.PI/2; // start near south entrance, face north
+const FOV=Math.PI/2.2, SPD=0.06;
+function move(dx,dy){
+  if(!solid(px+dx,py))px+=dx;
+  if(!solid(px,py+dy))py+=dy;
+}
 
-function wTex(c){if(c===1)return T_WALL;if(c===2||c===3)return T_SHELF;if(c===5)return T_BACK;return T_WALL;}
-
-// ═══════════════════════════════════════════════
-// PLAYER
-// ═══════════════════════════════════════════════
-let px=11, py=1.5, pAngle=Math.PI/2;
-const FOV=Math.PI/2.5, SPD=0.055;
-function move(dx,dy){ if(!solid(px+dx,py))px+=dx; if(!solid(px,py+dy))py+=dy; }
-
-// ═══════════════════════════════════════════════
-// RAYCASTER
-// ═══════════════════════════════════════════════
-const RAYS=Math.min(W,480);
-const zBuf=new Float32Array(RAYS); // depth buffer for sprite clipping
-
-const canvas=document.getElementById('canvas');
+// ═══ CANVAS ══════════════════════════════════════════
+const canvas=document.getElementById('c');
 const ctx=canvas.getContext('2d');
 let W=window.innerWidth,H=window.innerHeight;
-canvas.width=W; canvas.height=H;
+canvas.width=W;canvas.height=H;
+const RAYS=Math.min(W,520);
 
-// Player eye height as fraction of wall (0=floor, 1=ceiling)
-// We render at midscreen. World "floor level" = 0, "ceiling" = 1
-// Sprite world height is worldH (0..1 ish)
-const WALL_H_WORLD = 1.0; // wall is 1 world unit tall
+// Hit movie for E interaction
+let hitMovie=null,hitDist=Infinity;
 
-let hitMovie=null, hitDist=Infinity;
-
+// ═══ RENDER ══════════════════════════════════════════
 function render(){
-  // Floor
+  // Blue carpet floor
   const fg=ctx.createLinearGradient(0,H/2,0,H);
-  fg.addColorStop(0,'#2255aa'); fg.addColorStop(1,'#162e66');
-  ctx.fillStyle=fg; ctx.fillRect(0,H/2,W,H/2);
-  ctx.strokeStyle='rgba(12,30,80,0.5)'; ctx.lineWidth=1;
+  fg.addColorStop(0,'#2255aa');fg.addColorStop(1,'#162e66');
+  ctx.fillStyle=fg;ctx.fillRect(0,H/2,W,H/2);
+  ctx.strokeStyle='rgba(12,30,80,0.5)';ctx.lineWidth=1;
   for(let y=H/2+6;y<H;y+=12){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
 
   // Ceiling
   const cg=ctx.createLinearGradient(0,0,0,H/2);
-  cg.addColorStop(0,'#f0ebe0'); cg.addColorStop(1,'#e0d8c8');
-  ctx.fillStyle=cg; ctx.fillRect(0,0,W,H/2);
-  for(let lx=W*0.06;lx<W*1.05;lx+=W*0.22){
-    const lg=ctx.createRadialGradient(lx,0,0,lx,0,H*0.35);
-    lg.addColorStop(0,'rgba(255,252,235,0.32)'); lg.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.fillStyle=lg; ctx.fillRect(0,0,W,H/2);
+  cg.addColorStop(0,'#f0ebe0');cg.addColorStop(1,'#ddd8cc');
+  ctx.fillStyle=cg;ctx.fillRect(0,0,W,H/2);
+  for(let lx=W*0.08;lx<W;lx+=W*0.22){
+    const lg=ctx.createRadialGradient(lx,0,0,lx,0,H*0.38);
+    lg.addColorStop(0,'rgba(255,252,235,0.32)');lg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=lg;ctx.fillRect(0,0,W,H/2);
+    ctx.fillStyle='rgba(255,252,232,0.95)';
+    ctx.fillRect(lx-W*0.04,0,W*0.08,4);
   }
 
-  hitMovie=null; hitDist=Infinity;
+  hitMovie=null;hitDist=Infinity;
+  const centerCol=Math.floor(RAYS/2);
 
-  // ── Raycaster ──
   for(let i=0;i<RAYS;i++){
     const ang=pAngle-FOV/2+(i/RAYS)*FOV;
     const cos=Math.cos(ang),sin=Math.sin(ang);
     let rx=px,ry=py,d=0,cell=0;
-    while(d<26){rx+=cos*0.013;ry+=sin*0.013;d+=0.013;cell=mapAt(rx,ry);if(cell)break;}
+    while(d<35){
+      rx+=cos*0.012;ry+=sin*0.012;d+=0.012;
+      cell=mapAt(rx,ry);if(cell)break;
+    }
     const cd=Math.max(0.1,d*Math.cos(ang-pAngle));
-    zBuf[i]=cd;
     const sh=Math.min(H*3,H/cd);
     const st=(H-sh)/2;
     const sw=Math.ceil(W/RAYS)+1;
     const sx=Math.floor(i*W/RAYS);
+
+    // wallX = fractional position within the hit map cell
     const fracX=rx-Math.floor(rx),fracY=ry-Math.floor(ry);
     const wallX=(fracX<0.018||fracX>0.982)?fracY:fracX;
+
+    // Absolute world position along the wall
+    // For walls running east-west (north/south facing): use world X = floor(rx)+wallX
+    // For walls running north-south (east/west facing): use world Y = floor(ry)+wallX
+    const mx=Math.floor(rx),my=Math.floor(ry);
+    const isNS = (mx===0||mx===MW-1); // east/west wall = north-south running
+    const wallAbsX = isNS ? (Math.floor(ry)+wallX) : (mx+wallX);
+
+    // Draw base wall texture
     ctx.drawImage(wTex(cell),Math.floor(wallX*64),0,1,64,sx,st,sw,sh);
-    ctx.fillStyle=`rgba(0,0,0,${Math.min(0.88,cd/9)})`;
+
+    // Draw boxes on shelf/wall cells
+    if(cell===1||cell===2){
+      const gi=wallGenre(cell,mx,my);
+      drawBoxColumn(sx,sw,st,sh,cd,wallAbsX,gi,i===centerCol);
+    }
+
+    // Counter label
+    if(cell===3){
+      ctx.fillStyle='rgba(255,215,0,0.15)';
+      ctx.fillRect(sx,st,sw,sh);
+    }
+
+    // Distance fog
+    ctx.fillStyle=`rgba(0,0,0,${Math.min(0.88,cd/14)})`;
     ctx.fillRect(sx,st,sw,sh);
   }
 
-  // ── Sprite pass ──
-  // Project each sprite to screen, sort back-to-front, draw with z-clipping
-  drawSprites();
-
-  // ── Genre signs ──
   drawSigns();
-
-  // Ceiling strips
-  ctx.fillStyle='rgba(255,252,232,0.95)';
-  for(let lx=W*0.06;lx<W*1.05;lx+=W*0.22)ctx.fillRect(lx-W*0.045,0,W*0.09,4);
 }
 
-// ═══════════════════════════════════════════════
-// SPRITE PROJECTION & DRAWING
-// Each sprite is a VHS box at world position (wx, wy, worldH)
-// We project its center to screen, compute screen size,
-// then draw the portrait box at the correct screen position
-// ═══════════════════════════════════════════════
-function drawSprites(){
-  const halfW=W/2, halfFOV=FOV/2;
-  const planeDist=halfW/Math.tan(halfFOV); // focal length
+// Draw one screen column of boxes on a shelf/wall
+function drawBoxColumn(sx,sw,st,sh,cd,wallAbsX,gi,isCenter){
+  for(let row=0;row<BOX_ROWS;row++){
+    const bot=ROW_BOT[row];
+    const top=bot+ROW_H;
 
-  // Project all sprites
-  for(const s of sprites){
-    const dx=s.wx-px, dy=s.wy-py;
-    // Rotate into camera space
-    const camX= dx*Math.cos(-pAngle) - dy*Math.sin(-pAngle);
-    const camZ= dx*Math.sin(-pAngle) + dy*Math.cos(-pAngle);
-    if(camZ<=0.05){ s.dist=-1; continue; } // behind player
+    // Screen Y: st=ceiling of wall, st+sh=floor
+    // wallFrac 0=floor → y=st+sh, wallFrac 1=ceiling → y=st
+    const scrBot=st+sh*(1-bot);
+    const scrTop=st+sh*(1-top);
+    const scrH=scrBot-scrTop;
 
-    s.dist=camZ;
-    s.camX=camX;
-    // Screen X of sprite center
-    s.screenX=halfW + (camX/camZ)*planeDist;
-    // Scale: how big 1 world unit appears at this distance
-    s.scale=planeDist/camZ;
-  }
+    if(scrH<0.5)continue;
+    if(scrTop>H||scrBot<0)continue;
 
-  // Sort back to front (painter's algorithm)
-  sprites.sort((a,b)=>b.dist-a.dist);
+    const res=getMovieAt(wallAbsX,row,gi);
+    if(!res)continue;
 
-  for(const s of sprites){
-    if(s.dist<0||s.dist>18)continue;
+    const {movie,faceX}=res;
 
-    const scale=s.scale;
+    // Load poster image when close
+    if(cd<5) loadImg(movie.imgSm);
 
-    // Screen size of box
-    const scrW=Math.max(1,BOX_W*scale);
-    const scrH=Math.max(1,BOX_H*scale);
+    const e=movie.imgSm?IC.get(movie.imgSm):null;
+    const ok=e&&e.ok&&e.img;
 
-    // Vertical position on screen
-    // worldH=0 means floor level. Eye is at height 0.5 (mid-wall).
-    // Screen Y for world height h:
-    //   offset from center = (0.5 - h) * scale   [positive = below center]
-    // Box bottom = worldH, box top = worldH+BOX_H
-    const eyeH=0.5; // player eye height in world units (0=floor,1=ceiling)
-    const scrYbot = H/2 + (eyeH - s.worldH)*scale;
-    const scrYtop = scrYbot - scrH;
-
-    // Horizontal position
-    const scrXleft = s.screenX - scrW/2;
-
-    // Skip if off screen
-    if(scrXleft+scrW<0||scrXleft>W)continue;
-    if(scrYtop+scrH<0||scrYtop>H)continue;
-
-    // Z-buffer clipping: only draw columns where depth < wall depth
-    const colStart=Math.max(0,Math.floor(scrXleft));
-    const colEnd  =Math.min(W-1,Math.ceil(scrXleft+scrW));
-
-    // Check if any column is visible (not behind a wall)
-    let visible=false;
-    for(let col=colStart;col<=colEnd;col+=2){
-      const rayIdx=Math.round(col*RAYS/W);
-      if(rayIdx<RAYS && s.dist < zBuf[rayIdx]){ visible=true; break; }
-    }
-    if(!visible)continue;
-
-    // Distance fog
-    const fog=Math.min(0.82,s.dist/10);
-
-    // Load poster when close
-    if(s.dist<5) requestLoad(s.movie.imgSm);
-
-    // Draw the box face
-    if(scrW>=4){
-      // Get cached sprite face canvas
-      const face=getSpriteFace(s.movie, scrW, scrH);
-
-      // Clip to z-buffer column by column for proper occlusion
-      // For performance, just check left/right thirds and draw if clear
-      const leftOk  = s.dist < (zBuf[Math.round(colStart*RAYS/W)]||999);
-      const midOk   = s.dist < (zBuf[Math.round(((colStart+colEnd)/2)*RAYS/W)]||999);
-      const rightOk = s.dist < (zBuf[Math.round(colEnd*RAYS/W)]||999);
-
-      if(leftOk||midOk||rightOk){
-        ctx.globalAlpha=1-fog;
-        ctx.drawImage(face, scrXleft, scrYtop, scrW, scrH);
-        ctx.globalAlpha=1;
-      }
-    } else if(scrW>=1){
-      // Too small for full canvas — just draw colored pixel line
-      const hue=s.movie.hue;
-      ctx.fillStyle=`hsla(${hue},40%,${Math.round(15+scrW*4)}%,${1-fog})`;
-      ctx.fillRect(scrXleft,scrYtop,scrW,scrH);
+    if(cd<8&&scrH>4){
+      // Draw from box face canvas — slice at faceX
+      const FACE_W=64;
+      const face=getBoxFaceCanvas(movie,FACE_W,Math.ceil(scrH));
+      const sliceX=Math.floor(faceX*(FACE_W-1));
+      ctx.drawImage(face,sliceX,0,1,face.height,sx,scrTop,sw,scrH);
+    } else {
+      // Far LOD: colored rect
+      ctx.fillStyle=`hsl(${movie.hue},45%,${Math.round(12+Math.max(0,8-cd)*2)}%)`;
+      ctx.fillRect(sx,scrTop,sw,scrH);
+      // Top highlight
+      ctx.fillStyle='rgba(255,255,255,0.2)';
+      ctx.fillRect(sx,scrTop,sw,Math.max(1,scrH*0.06));
     }
 
-    // Hit detection — crosshair center hits this sprite
-    if(s.dist<3.0 && s.dist<hitDist && scrW>20){
-      const csx=W/2, csy=H/2;
-      if(csx>=scrXleft&&csx<=scrXleft+scrW&&csy>=scrYtop&&csy<=scrYtop+scrH){
-        hitMovie=s.movie; hitDist=s.dist;
+    // Shelf board below each row
+    const boardH=Math.max(1,scrH*0.06);
+    ctx.fillStyle='rgba(80,50,10,0.95)';
+    ctx.fillRect(sx,scrBot,sw,boardH);
+
+    // Distance fog on boxes
+    ctx.fillStyle=`rgba(0,0,0,${Math.min(0.78,cd/15)})`;
+    ctx.fillRect(sx,scrTop,sw,scrH);
+
+    // Center crosshair hit detection
+    if(isCenter&&cd<3.0&&scrH>20&&cd<hitDist){
+      const cy=H/2;
+      if(cy>=scrTop&&cy<=scrBot){
+        hitMovie=movie;hitDist=cd;
       }
     }
   }
 }
 
-// ═══════════════════════════════════════════════
-// GENRE SIGNS — billboard above each shelf
-// ═══════════════════════════════════════════════
+// ═══ GENRE SIGNS ═════════════════════════════════════
+// Project signs as billboards above each section
+// Signs float above the relevant wall section
+
 function projectPt(wx,wy){
   const dx=wx-px,dy=wy-py;
   const camX=dx*Math.cos(-pAngle)-dy*Math.sin(-pAngle);
   const camZ=dx*Math.sin(-pAngle)+dy*Math.cos(-pAngle);
-  if(camZ<0.15)return null;
+  if(camZ<0.2)return null;
   const scrX=(W/2)+(camX/camZ)*(W/2/Math.tan(FOV/2));
   return{scrX,scale:H/camZ,camZ};
 }
 
+// Sign world positions — center of each wall section + aisle signs
+const SIGN_POS=[
+  {wx:MW*0.25, wy:0.8,    gi:0}, // north wall left — New Releases
+  {wx:MW*0.75, wy:0.8,    gi:1}, // north wall right — Action
+  {wx:MW-0.8,  wy:MH*0.3, gi:2}, // east wall top — Comedy
+  {wx:MW-0.8,  wy:MH*0.7, gi:3}, // east wall bottom — Horror
+  {wx:0.8,     wy:MH*0.3, gi:4}, // west wall top — Drama
+  {wx:0.8,     wy:MH*0.7, gi:5}, // west wall bottom — Sci-Fi
+  {wx:MW/2,    wy:10.5,   gi:6}, // aisle 1 — Thriller
+  {wx:MW/2,    wy:18.5,   gi:7}, // aisle 2 — Animation
+  {wx:MW/2,    wy:26.5,   gi:0}, // aisle 3 — New Releases overflow
+];
+
 function drawSigns(){
-  for(let gi=0;gi<GENRES.length;gi++){
-    const wy=SHELF_ROWS[gi]+0.5;
-    const p=projectPt(MW/2,wy);
+  for(const sp of SIGN_POS){
+    const p=projectPt(sp.wx,sp.wy);
     if(!p)continue;
-    const fog=Math.min(0.9,p.camZ/15);
+    const fog=Math.min(0.9,p.camZ/20);
     if(fog>=0.9)continue;
-    const sw=Math.min(W*0.32,p.scale*3.2);
-    const sh=sw*(SIGN_H/SIGN_W);
-    // Pin sign just above shelf top
-    // Shelf top = worldH SHELF_BOTTOM + SHELF_ROWS_VERTICAL*BOX_H ≈ 0.05+6*0.33=2.03
-    // Above wall: sign at world height 1.05 (slightly above wall height 1.0)
-    const signWorldH=1.05;
-    const eyeH=0.5;
-    const scrYsign=H/2+(eyeH-signWorldH)*p.scale;
-    const scrY=scrYsign-sh/2;
+    const sw=Math.min(W*0.28,p.scale*2.8);
+    const sh=sw*(SC[0].height/SC[0].width);
+    // Pin sign just above the shelf/wall top
+    const scrY=H/2-p.scale*0.58-sh;
     if(scrY+sh<-sh||scrY>H)continue;
     ctx.globalAlpha=Math.max(0,1-fog);
-    ctx.drawImage(signC[gi],p.scrX-sw/2,scrY,sw,sh);
+    ctx.drawImage(SC[sp.gi],p.scrX-sw/2,scrY,sw,sh);
     ctx.globalAlpha=1;
-    // Mounting rods
-    if(sw>50&&p.camZ<12){
-      ctx.strokeStyle=`rgba(80,50,10,${(1-fog)*0.7})`;
-      ctx.lineWidth=1.5;
-      ctx.beginPath();ctx.moveTo(p.scrX-sw*0.3,scrY+sh);ctx.lineTo(p.scrX-sw*0.3,scrY+sh+sh*0.6);ctx.stroke();
-      ctx.beginPath();ctx.moveTo(p.scrX+sw*0.3,scrY+sh);ctx.lineTo(p.scrX+sw*0.3,scrY+sh+sh*0.6);ctx.stroke();
+    // Mounting rod
+    if(sw>40&&p.camZ<16){
+      ctx.strokeStyle=`rgba(80,50,10,${(1-fog)*0.6})`;ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(p.scrX,scrY+sh);ctx.lineTo(p.scrX,scrY+sh+sh*0.5);ctx.stroke();
     }
   }
 }
 
-// ═══════════════════════════════════════════════
-// MINIMAP
-// ═══════════════════════════════════════════════
+// ═══ MINIMAP ═════════════════════════════════════════
 function minimap(){
-  const ms=4,mw=MW*ms,mh=MH*ms,ox=W-mw-10,oy=H-mh-10;
+  const ms=3,mw=MW*ms,mh=MH*ms,ox=W-mw-10,oy=H-mh-10;
   ctx.fillStyle='rgba(0,0,0,0.65)';ctx.fillRect(ox-1,oy-1,mw+2,mh+2);
   for(let my=0;my<MH;my++)for(let mx=0;mx<MW;mx++){
     const c=MAP[my][mx];
-    ctx.fillStyle=c===0?'#0d2244':c===1?'#b89000':c===2?'#4a3010':c===5?'#0a0a20':'#1a1a1a';
+    ctx.fillStyle=c===0?'#0d2244':c===1?'#b89000':c===2?'#5a3a10':c===3?'#3a1a08':'#1a1a1a';
     ctx.fillRect(ox+mx*ms,oy+my*ms,ms-1,ms-1);
   }
   ctx.fillStyle='#FFD700';ctx.beginPath();ctx.arc(ox+px*ms,oy+py*ms,3,0,Math.PI*2);ctx.fill();
@@ -658,77 +604,72 @@ function minimap(){
   ctx.lineTo(ox+px*ms+Math.cos(pAngle)*10,oy+py*ms+Math.sin(pAngle)*10);ctx.stroke();
 }
 
-// ═══════════════════════════════════════════════
-// HUD
-// ═══════════════════════════════════════════════
-const aisleEl=document.getElementById('aisle-label');
-let lastAisle='',aisleT=null;
-const AISLE_LABELS=['🎬 NEW RELEASES','💥 ACTION','😂 COMEDY','👻 HORROR','🎭 DRAMA','🚀 SCI-FI','⭐ FEATURED'];
-function updateAisle(){
-  let lbl='ENTRANCE';
-  if(py>3.5&&py<5.5)  lbl=AISLE_LABELS[0];
-  else if(py>6.5&&py<8.5)  lbl=AISLE_LABELS[1];
-  else if(py>9.5&&py<11.5) lbl=AISLE_LABELS[2];
-  else if(py>12.5&&py<14.5)lbl=AISLE_LABELS[3];
-  else if(py>15.5&&py<17.5)lbl=AISLE_LABELS[4];
-  else if(py>18.5&&py<20.5)lbl=AISLE_LABELS[5];
-  else if(py>21)            lbl=AISLE_LABELS[6];
-  if(lbl!==lastAisle){lastAisle=lbl;aisleEl.textContent=lbl;aisleEl.classList.add('show');clearTimeout(aisleT);aisleT=setTimeout(()=>aisleEl.classList.remove('show'),2400);}
+// ═══ HUD ═════════════════════════════════════════════
+const whereEl=document.getElementById('where');
+let lastWhere='',whereT=null;
+function updateWhere(){
+  // Label based on Y position
+  let lbl='';
+  if(py>MH-5)     lbl='ENTRANCE';
+  else if(py>26)  lbl='🚀 SCI-FI · 🎬 NEW RELEASES';
+  else if(py>18)  lbl='🎬 ANIMATION · 💥 ACTION';
+  else if(py>10)  lbl='😱 THRILLER · 🎭 DRAMA';
+  else if(py<4)   lbl='🎬 NEW RELEASES · 💥 ACTION';
+  if(lbl!==lastWhere){
+    lastWhere=lbl;whereEl.textContent=lbl;
+    whereEl.classList.add('show');clearTimeout(whereT);
+    whereT=setTimeout(()=>whereEl.classList.remove('show'),2400);
+  }
+}
+const pickEl=document.getElementById('pick');
+function updatePick(){
+  if(hitMovie){pickEl.classList.add('show');document.getElementById('xhair').classList.add('dim');if(isMobile)document.getElementById('eb').style.display='flex';}
+  else{pickEl.classList.remove('show');document.getElementById('xhair').classList.remove('dim');if(isMobile)document.getElementById('eb').style.display='none';}
 }
 
-const pickEl=document.getElementById('pickup-prompt');
-function updatePrompt(){
-  if(hitMovie){pickEl.classList.add('show');document.getElementById('crosshair').classList.add('dim');if(isMobile)document.getElementById('e-btn').style.display='flex';}
-  else{pickEl.classList.remove('show');document.getElementById('crosshair').classList.remove('dim');if(isMobile)document.getElementById('e-btn').style.display='none';}
-}
-
-// ═══════════════════════════════════════════════
-// VHS FLIP
-// ═══════════════════════════════════════════════
+// ═══ VHS FLIP ════════════════════════════════════════
 let vhsOpen=false,vhsFlipped=false,curMovie=null;
 function openVHS(m){
   curMovie=m;vhsOpen=true;vhsFlipped=false;
   if(pointerLocked)document.exitPointerLock();
-  const fi=document.getElementById('vhs-fi'),ff=document.getElementById('vhs-ff');
+  const fi=document.getElementById('vf-img'),ff=document.getElementById('vf-fb');
   if(m.imgLg){fi.src=m.imgLg;fi.style.display='block';ff.style.display='none';}
-  else{fi.style.display='none';ff.style.display='flex';document.getElementById('vhs-ft').textContent=m.title;}
-  document.getElementById('vb-title').textContent=m.title;
-  document.getElementById('vb-meta').textContent=`${m.year}  ·  ★ ${m.rating}`;
-  document.getElementById('vb-genre').textContent=m.genre;
-  document.getElementById('vb-genre').style.background=m.genreColor||'#1565C0';
-  document.getElementById('vb-rating').textContent=`★ ${m.rating}`;
-  document.getElementById('vb-syn').textContent=m.desc;
-  const bp=document.getElementById('vb-poster');
+  else{fi.style.display='none';ff.style.display='flex';document.getElementById('vf-ft').textContent=m.title;}
+  document.getElementById('vb-ti').textContent=m.title;
+  document.getElementById('vb-me').textContent=`${m.year}  ·  ★ ${m.rating}`;
+  document.getElementById('vb-ge').textContent=m.genre;
+  document.getElementById('vb-ge').style.background=m.genreColor||'#1565C0';
+  document.getElementById('vb-ra').textContent=`★ ${m.rating}`;
+  document.getElementById('vb-sy').textContent=m.desc;
+  const bp=document.getElementById('vb-po');
   if(m.imgSm){bp.src=m.imgSm;bp.style.display='block';}else bp.style.display='none';
-  document.getElementById('vhs-flipper').classList.remove('flipped');
-  document.getElementById('vhs-hint').textContent='CLICK TO FLIP';
-  document.getElementById('vhs-overlay').classList.add('active');
+  document.getElementById('vhs-fl').classList.remove('flip');
+  document.getElementById('vhs-hi').textContent='CLICK TO FLIP';
+  document.getElementById('vhs-ov').classList.add('on');
 }
-document.getElementById('vhs-overlay').addEventListener('click',e=>{
-  if(e.target.id==='vhs-watch'||e.target.id==='vhs-putback')return;
+document.getElementById('vhs-ov').addEventListener('click',e=>{
+  if(e.target.id==='vb-wa'||e.target.id==='vb-pu')return;
   if(!vhsOpen)return;
   vhsFlipped=!vhsFlipped;
-  document.getElementById('vhs-flipper').classList.toggle('flipped',vhsFlipped);
-  document.getElementById('vhs-hint').textContent=vhsFlipped?'CLICK TO FLIP BACK':'CLICK TO FLIP';
+  document.getElementById('vhs-fl').classList.toggle('flip',vhsFlipped);
+  document.getElementById('vhs-hi').textContent=vhsFlipped?'CLICK TO FLIP BACK':'CLICK TO FLIP';
 });
-function closeVHS(){vhsOpen=false;document.getElementById('vhs-overlay').classList.remove('active');}
+function closeVHS(){vhsOpen=false;document.getElementById('vhs-ov').classList.remove('on');}
 function watchMovie(){if(!curMovie)return;window.open(`https://www.google.com/search?q=watch+${encodeURIComponent(curMovie.title)}+streaming`,'_blank');}
-function tryInteract(){if(hitMovie&&!vhsOpen)openVHS(hitMovie);}
+function tryPickup(){if(hitMovie&&!vhsOpen)openVHS(hitMovie);}
 
-// ═══════════════════════════════════════════════
-// INPUT
-// ═══════════════════════════════════════════════
+// ═══ INPUT ═══════════════════════════════════════════
 const keys={};
-document.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if((e.key==='e'||e.key==='E')&&!vhsOpen)tryInteract();if(e.key==='Escape'&&vhsOpen)closeVHS();});
+document.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if((e.key==='e'||e.key==='E')&&!vhsOpen)tryPickup();if(e.key==='Escape'&&vhsOpen)closeVHS();});
 document.addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
 let pointerLocked=false;
 canvas.addEventListener('click',()=>{if(vhsOpen||!document.getElementById('intro').classList.contains('out'))return;canvas.requestPointerLock();});
 document.addEventListener('pointerlockchange',()=>{pointerLocked=document.pointerLockElement===canvas;});
 document.addEventListener('mousemove',e=>{if(pointerLocked&&!vhsOpen)pAngle+=e.movementX*0.002;});
 const isMobile='ontouchstart' in window;
-if(isMobile){document.getElementById('joy-zone').style.display='block';document.getElementById('look-zone').style.display='block';document.getElementById('controls').style.display='none';}
+if(isMobile){document.getElementById('jz').style.display='block';document.getElementById('lz').style.display='block';document.getElementById('ctrls').style.display='none';}
 let joyOn=false,joyX=0,joyY=0;
-const jZ=document.getElementById('joy-zone'),jD=document.getElementById('joy-dot');
+const jZ=document.getElementById('jz'),jD=document.getElementById('jd');
 jZ.addEventListener('touchstart',e=>{joyOn=true;e.preventDefault();},{passive:false});
 jZ.addEventListener('touchend',()=>{joyOn=false;joyX=0;joyY=0;jD.style.transform='translate(-50%,-50%)';});
 jZ.addEventListener('touchmove',e=>{
@@ -739,24 +680,22 @@ jZ.addEventListener('touchmove',e=>{
   joyX=dx/mx;joyY=dy/mx;jD.style.transform=`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`;
 },{passive:false});
 let lkX=0,lkOn=false;
-const lZ=document.getElementById('look-zone');
+const lZ=document.getElementById('lz');
 lZ.addEventListener('touchstart',e=>{lkOn=true;lkX=e.touches[0].clientX;e.preventDefault();},{passive:false});
 lZ.addEventListener('touchend',()=>lkOn=false);
 lZ.addEventListener('touchmove',e=>{if(!lkOn)return;e.preventDefault();pAngle+=(e.touches[0].clientX-lkX)*0.005;lkX=e.touches[0].clientX;},{passive:false});
 
-// ═══════════════════════════════════════════════
-// GAME LOOP
-// ═══════════════════════════════════════════════
+// ═══ LOOP ════════════════════════════════════════════
 let started=false;
 function loop(){
   requestAnimationFrame(loop);
   if(!started||vhsOpen)return;
-  if(keys['w']||keys['arrowup'])   move(Math.cos(pAngle)*SPD,Math.sin(pAngle)*SPD);
+  if(keys['w']||keys['arrowup'])   move(Math.cos(pAngle)*SPD,  Math.sin(pAngle)*SPD);
   if(keys['s']||keys['arrowdown']) move(-Math.cos(pAngle)*SPD,-Math.sin(pAngle)*SPD);
   if(keys['a']||keys['arrowleft']) pAngle-=0.032;
   if(keys['d']||keys['arrowright'])pAngle+=0.032;
   if(joyOn){move(Math.cos(pAngle)*(-joyY)*SPD*1.3,Math.sin(pAngle)*(-joyY)*SPD*1.3);pAngle+=joyX*0.04;}
-  render();minimap();updateAisle();updatePrompt();
+  render();minimap();updateWhere();updatePick();
 }
 requestAnimationFrame(loop);
 
@@ -767,13 +706,11 @@ function enterStore(){
 }
 window.addEventListener('resize',()=>{W=window.innerWidth;H=window.innerHeight;canvas.width=W;canvas.height=H;});
 
-// ═══════════════════════════════════════════════
-// INIT
-// ═══════════════════════════════════════════════
+// ═══ INIT ════════════════════════════════════════════
 async function init(){
-  const bar=document.getElementById('ld-bar'),st=document.getElementById('ld-status');
-  const retry=document.getElementById('ld-retry');
-  retry.style.display='none'; bar.style.width='0%';
+  const bar=document.getElementById('ld-br'),st=document.getElementById('ld-st');
+  const retry=document.getElementById('ld-re');
+  retry.style.display='none';bar.style.width='0%';
   let fail=false;
   for(let i=0;i<GENRES.length;i++){
     st.textContent=`Loading ${GENRES[i].label}...`;
@@ -781,11 +718,10 @@ async function init(){
     bar.style.width=`${Math.round((i+1)/GENRES.length*100)}%`;
   }
   if(fail&&POOL.every(p=>!p.length)){st.textContent='Connection failed.';retry.style.display='block';return;}
-  buildSprites();
   st.textContent='Ready!';
   await new Promise(r=>setTimeout(r,300));
-  document.getElementById('loading').classList.add('out');
-  setTimeout(()=>{document.getElementById('loading').style.display='none';document.getElementById('intro').style.display='flex';},600);
+  document.getElementById('ld').classList.add('out');
+  setTimeout(()=>{document.getElementById('ld').style.display='none';document.getElementById('intro').style.display='flex';},600);
 }
 init();
 </script>
