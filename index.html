@@ -537,7 +537,14 @@ async function buildStore() {
   for(let i=0; i<units.length; i++){
     const u = units[i];
     st.textContent = `Placing ${u[4]}... (${i+1}/${units.length})`;
-    createShelfUnit(u[0], u[1], u[2], u[3], u[4], u[5]);
+    try {
+      createShelfUnit(u[0], u[1], u[2], u[3], u[4], u[5]);
+    } catch(e) {
+      st.textContent = `ERROR on shelf ${i+1}: ${e.message}`;
+      console.error(e);
+      await new Promise(r=>setTimeout(r,5000));
+      return;
+    }
     await new Promise(r=>setTimeout(r,10));
   }
 }
@@ -883,7 +890,14 @@ async function init(){
     st.textContent='Connection failed.';retry.style.display='block';return;
   }
   st.textContent='Building store...';
-  await buildStore();
+  try {
+    await buildStore();
+  } catch(e) {
+    st.textContent = 'CRASH: ' + e.message;
+    console.error(e);
+    document.getElementById('ld-re').style.display='block';
+    return;
+  }
   // Debug panel — shows on screen so we can diagnose mobile
   const dbg = document.createElement('div');
   dbg.style.cssText='position:fixed;top:60px;left:10px;background:rgba(0,0,0,0.85);color:#0f0;font-family:monospace;font-size:11px;padding:8px;border-radius:4px;z-index:999;max-width:280px;pointer-events:none;';
