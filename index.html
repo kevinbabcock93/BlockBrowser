@@ -597,8 +597,76 @@ function buildStore() {
 const controls = new PointerLockControls(camera, renderer.domElement);
 scene.add(controls.getObject());
 
+const isMobile = 'ontouchstart' in window;
+
+// Update HUD for mobile
+if(isMobile){
+  document.getElementById('controls').innerHTML = `
+    <div class="ck"><b>Left</b> Move</div>
+    <div class="ck"><b>Right</b> Look</div>
+    <div class="ck"><b>Tap box</b> Pick Up</div>
+  `;
+  // Add joystick elements
+  const joyHTML = `
+    <div id="jz" style="position:fixed;left:0;bottom:0;width:50%;height:44%;pointer-events:all;z-index:15;">
+      <div id="jp" style="position:absolute;bottom:30px;left:50%;transform:translateX(-50%);width:80px;height:80px;border-radius:50%;border:2px solid rgba(255,215,0,0.4);background:rgba(255,215,0,0.08);">
+        <div id="jd" style="position:absolute;width:28px;height:28px;border-radius:50%;background:rgba(255,215,0,0.6);top:50%;left:50%;transform:translate(-50%,-50%);"></div>
+      </div>
+    </div>
+    <div id="lz" style="position:fixed;right:0;bottom:0;width:50%;height:44%;pointer-events:all;z-index:15;"></div>
+  `;
+  document.getElementById('hud').insertAdjacentHTML('beforeend', joyHTML);
+}
+
+// ── Mobile joystick state ──
+let joyOn=false, joyX=0, joyY=0;
+let lookOn=false, lookLastX=0, lookLastY=0;
+
+if(isMobile){
+  const jZ = document.getElementById('jz');
+  const jD = document.getElementById('jd');
+  jZ.addEventListener('touchstart',e=>{joyOn=true;e.preventDefault();},{passive:false});
+  jZ.addEventListener('touchend',()=>{joyOn=false;joyX=0;joyY=0;jD.style.transform='translate(-50%,-50%)';});
+  jZ.addEventListener('touchmove',e=>{
+    if(!joyOn)return;e.preventDefault();
+    const t=e.touches[0],r=jZ.getBoundingClientRect();
+    let dx=t.clientX-(r.left+r.width/2),dy=t.clientY-(r.top+r.height*0.65);
+    const d=Math.sqrt(dx*dx+dy*dy),mx=34;
+    if(d>mx){dx=dx/d*mx;dy=dy/d*mx;}
+    joyX=dx/mx;joyY=dy/mx;
+    jD.style.transform=`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`;
+  },{passive:false});
+
+  const lZ = document.getElementById('lz');
+  lZ.addEventListener('touchstart',e=>{
+    if(inspectOpen)return;
+    lookOn=true;lookLastX=e.touches[0].clientX;lookLastY=e.touches[0].clientY;
+    e.preventDefault();
+  },{passive:false});
+  lZ.addEventListener('touchend',()=>lookOn=false);
+  lZ.addEventListener('touchmove',e=>{
+    if(!lookOn||inspectOpen)return;e.preventDefault();
+    const dx=e.touches[0].clientX-lookLastX;
+    const dy=e.touches[0].clientY-lookLastY;
+    camera.rotation.order='YXZ';
+    camera.rotation.y -= dx*0.004;
+    camera.rotation.x -= dy*0.003;
+    camera.rotation.x=Math.max(-Math.PI/3,Math.min(Math.PI/3,camera.rotation.x));
+    lookLastX=e.touches[0].clientX;lookLastY=e.touches[0].clientY;
+  },{passive:false});
+
+  // Tap on a box to pick it up (tap right side near center)
+  lZ.addEventListener('touchend',e=>{
+    if(inspectOpen)return;
+    // Raycast from screen center on tap
+    checkHover();
+    if(hoveredBox) openInspect(hoveredBox);
+  },{passive:false});
+}
+
 renderer.domElement.addEventListener('click', ()=>{
-  if(!inspectOpen) controls.lock();
+  if(inspectOpen) return;
+  if(!isMobile) controls.lock();
 });
 
 const keys = {};
@@ -612,6 +680,20 @@ const SPEED = 0.055;
 const moveDir = new THREE.Vector3();
 
 function updateMovement() {
+  if(isMobile){
+    // Mobile: joystick drives movement in camera-facing direction
+    if(joyOn && (Math.abs(joyX)>0.05 || Math.abs(joyY)>0.05)){
+      const forward = new THREE.Vector3(-Math.sin(camera.rotation.y), 0, -Math.cos(camera.rotation.y));
+      const right   = new THREE.Vector3( Math.cos(camera.rotation.y), 0, -Math.sin(camera.rotation.y));
+      camera.position.addScaledVector(forward, -joyY * SPEED * 1.2);
+      camera.position.addScaledVector(right,    joyX * SPEED * 1.2);
+    }
+    camera.position.x = Math.max(-8.8, Math.min(8.8, camera.position.x));
+    camera.position.z = Math.max(-32.5, Math.min(4.5, camera.position.z));
+    camera.position.y = 1.65;
+    return;
+  }
+  // Desktop: PointerLock
   if(!controls.isLocked) return;
   moveDir.set(0,0,0);
   if(keys['w']||keys['arrowup'])    moveDir.z -= 1;
@@ -623,7 +705,6 @@ function updateMovement() {
     controls.moveRight(moveDir.x);
     controls.moveForward(-moveDir.z);
   }
-  // Clamp to store bounds
   const p = controls.getObject().position;
   p.x = Math.max(-8.8, Math.min(8.8, p.x));
   p.z = Math.max(-32.5, Math.min(4.5, p.z));
@@ -794,7 +875,7 @@ function resetAutoRotate(){
 const labelEl = document.getElementById('section-label');
 let lastLabel='',labelTimer=null;
 function updateLabel(){
-  const z=camera.position.z;
+  const z = isMobile ? camera.position.z : controls.getObject().position.z;
   let lbl='';
   if(z>2)          lbl='ENTRANCE';
   else if(z>-6)   lbl='🎬 NEW RELEASES · 🎭 DRAMA';
