@@ -363,31 +363,39 @@ const MAT_BOTTOM = new THREE.MeshLambertMaterial({color:0xc8c0b4});
 // Spine materials are now created per-box using texture offset/repeat on the atlas
 
 // ── Create one VHS box mesh ──
-// Uses shared geometry + per-box spine material using texture offset/repeat
-// NO geometry cloning — texture transform selects the right atlas column
-function createVHSBox(movie, col) {
-  const gi = movie.genreIdx;
+// Pre-built spine materials: spineMats[gi][col] = MeshLambertMaterial
+// Built once after atlases, reused by every box — no cloning at box creation time
+const spineMats = [];
 
-  // Create a unique material for the spine face only
-  // It uses the shared genre atlas texture but with offset+repeat to show only col's cell
-  const atlasTex = genreAtlas[gi].texture;
-  const spineMat = new THREE.MeshLambertMaterial({ map: atlasTex });
-  // Clone the texture so we can set unique offset/repeat per box
-  spineMat.map = atlasTex.clone();
-  spineMat.map.needsUpdate = true;
-  spineMat.map.repeat.set(1 / ATLAS_COLS, 1);
-  spineMat.map.offset.set(col / ATLAS_COLS, 0);
+function buildSpineMats() {
+  for(let gi=0; gi<GENRES.length; gi++){
+    spineMats[gi] = [];
+    const atlasTex = genreAtlas[gi].texture;
+    for(let col=0; col<ATLAS_COLS; col++){
+      const mat = new THREE.MeshLambertMaterial({map: atlasTex.clone()});
+      mat.map.offset.set(col / ATLAS_COLS, 0);
+      mat.map.repeat.set(1 / ATLAS_COLS, 1);
+      mat.map.needsUpdate = true;
+      spineMats[gi][col] = mat;
+    }
+  }
+}
+
+// Uses shared geometry + pre-built spine material — zero runtime allocation
+function createVHSBox(movie, col) {
+  const gi  = movie.genreIdx;
+  const safeCol = Math.min(col, ATLAS_COLS-1);
 
   const materials = [
-    MAT_SIDE,   // +x
-    MAT_SIDE,   // -x
-    MAT_TOP,    // +y
-    MAT_BOTTOM, // -y
-    spineMat,   // +z SPINE
-    MAT_SIDE,   // -z back (faces into shelf, not visible during browse)
+    MAT_SIDE,
+    MAT_SIDE,
+    MAT_TOP,
+    MAT_BOTTOM,
+    spineMats[gi][safeCol],
+    MAT_SIDE,
   ];
 
-  const mesh = new THREE.Mesh(VHS_GEO, materials); // shared geometry, no clone
+  const mesh = new THREE.Mesh(VHS_GEO, materials);
   mesh.castShadow    = false;
   mesh.receiveShadow = false;
   mesh.userData.movie = movie;
@@ -622,37 +630,55 @@ function addShelfSign(parent, label, gi, length) {
 }
 
 // ── Place all shelf units ──
-function buildStore() {
-  // Build one atlas texture per genre FIRST — this is the key mobile fix
-  // 8 atlases total instead of 320+ individual textures
-  for(let gi=0; gi<GENRES.length; gi++) buildGenreAtlas(gi);
-  // Wall shelves — east side (x=+8.5), facing west (-x direction, rotY=Math.PI)
-  createShelfUnit( 8.5, -2,  Math.PI, 0, 'NEW RELEASES', 7);
-  createShelfUnit( 8.5, -9,  Math.PI, 1, 'ACTION',       7);
-  createShelfUnit( 8.5,-16,  Math.PI, 2, 'COMEDY',       7);
-  createShelfUnit( 8.5,-23,  Math.PI, 3, 'HORROR',       7);
+async function buildStore() {
+  const st = document.getElementById('ld-st');
 
-  // Wall shelves — west side (x=-8.5), facing east (rotY=0)
-  createShelfUnit(-8.5, -2,  0,       4, 'DRAMA',        7);
-  createShelfUnit(-8.5, -9,  0,       5, 'SCI-FI',       7);
-  createShelfUnit(-8.5,-16,  0,       6, 'THRILLER',     7);
-  createShelfUnit(-8.5,-23,  0,       7, 'ANIMATION',    7);
+  // Build atlases with yields
+  for(let gi=0; gi<GENRES.length; gi++){
+    st.textContent = `Building ${GENRES[gi].label}...`;
+    buildGenreAtlas(gi);
+    await new Promise(r=>setTimeout(r,10));
+  }
 
-  // Freestanding aisle shelf — double sided
-  // Aisle 1 (z=-10): NEW RELEASES south face, ACTION north face
-  createShelfUnit( 0,-10,  0,       0, 'NEW RELEASES', 6); // south face
-  createShelfUnit( 0,-10,  Math.PI, 1, 'ACTION',       6); // north face
+  st.textContent = 'Preparing materials...';
+  buildSpineMats();
+  await new Promise(r=>setTimeout(r,10));
 
-  // Aisle 2 (z=-18)
-  createShelfUnit( 0,-18,  0,       2, 'COMEDY',       6);
-  createShelfUnit( 0,-18,  Math.PI, 3, 'HORROR',       6);
+  st.textContent = 'Placing shelves...';
 
-  // Aisle 3 (z=-26)
-  createShelfUnit( 0,-26,  0,       4, 'DRAMA',        6);
-  createShelfUnit( 0,-26,  Math.PI, 5, 'SCI-FI',       6);
+  // On mobile use shorter shelves (fewer boxes) to stay within GPU limits
+  // On desktop use full length
+  const wallLen  = isMobile ? 4 : 7;
+  const aisleLen = isMobile ? 3 : 6;
 
-  // Back wall
-  createShelfUnit( 0,-33, -Math.PI/2, 6, 'THRILLER',  14);
+  const units = [
+    // Wall shelves east
+    [ 8.5, -2,  Math.PI, 0, 'NEW RELEASES', wallLen],
+    [ 8.5, -9,  Math.PI, 1, 'ACTION',       wallLen],
+    [ 8.5,-16,  Math.PI, 2, 'COMEDY',       wallLen],
+    [ 8.5,-23,  Math.PI, 3, 'HORROR',       wallLen],
+    // Wall shelves west
+    [-8.5, -2,  0,       4, 'DRAMA',        wallLen],
+    [-8.5, -9,  0,       5, 'SCI-FI',       wallLen],
+    [-8.5,-16,  0,       6, 'THRILLER',     wallLen],
+    [-8.5,-23,  0,       7, 'ANIMATION',    wallLen],
+    // Aisle 1
+    [ 0,-10,  0,         0, 'NEW RELEASES', aisleLen],
+    [ 0,-10,  Math.PI,   1, 'ACTION',       aisleLen],
+    // Aisle 2
+    [ 0,-18,  0,         2, 'COMEDY',       aisleLen],
+    [ 0,-18,  Math.PI,   3, 'HORROR',       aisleLen],
+    // Aisle 3
+    [ 0,-26,  0,         4, 'DRAMA',        aisleLen],
+    [ 0,-26,  Math.PI,   5, 'SCI-FI',       aisleLen],
+    // Back wall
+    [ 0,-33,  -Math.PI/2, 6, 'THRILLER',   isMobile ? 6 : 14],
+  ];
+
+  for(const u of units){
+    createShelfUnit(u[0], u[1], u[2], u[3], u[4], u[5]);
+    await new Promise(r=>setTimeout(r,10)); // yield between each shelf
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -997,7 +1023,7 @@ async function init(){
     st.textContent='Connection failed.';retry.style.display='block';return;
   }
   st.textContent='Building store...';
-  buildStore();
+  await buildStore();
   // Debug panel — shows on screen so we can diagnose mobile
   const dbg = document.createElement('div');
   dbg.style.cssText='position:fixed;top:60px;left:10px;background:rgba(0,0,0,0.85);color:#0f0;font-family:monospace;font-size:11px;padding:8px;border-radius:4px;z-index:999;max-width:280px;pointer-events:none;';
