@@ -360,65 +360,34 @@ const MAT_SIDE   = new THREE.MeshLambertMaterial({color:0xddd8cc});
 const MAT_TOP    = new THREE.MeshLambertMaterial({color:0xf0e8dc});
 const MAT_BOTTOM = new THREE.MeshLambertMaterial({color:0xc8c0b4});
 
-// Spine materials are now created per-box using texture offset/repeat on the atlas
+// One solid-color spine material per genre — 8 total, shared by ALL boxes
+// Zero textures on shelf = zero GPU texture limit issues on mobile
+const genreSpineMats = GENRES.map(g =>
+  new THREE.MeshLambertMaterial({color: g.color})
+);
 
-// ── Create one VHS box mesh ──
-// Pre-built spine materials: spineMats[gi][col] = MeshLambertMaterial
-// Built once after atlases, reused by every box — no cloning at box creation time
-const spineMats = [];
-
-function buildSpineMats() {
-  for(let gi=0; gi<GENRES.length; gi++){
-    spineMats[gi] = [];
-    const atlasTex = genreAtlas[gi].texture;
-    for(let col=0; col<ATLAS_COLS; col++){
-      const mat = new THREE.MeshLambertMaterial({map: atlasTex.clone()});
-      mat.map.offset.set(col / ATLAS_COLS, 0);
-      mat.map.repeat.set(1 / ATLAS_COLS, 1);
-      mat.map.needsUpdate = true;
-      spineMats[gi][col] = mat;
-    }
-  }
-}
-
-// Uses shared geometry + pre-built spine material — zero runtime allocation
+// createVHSBox — shared geometry, shared materials, zero allocation per box
 function createVHSBox(movie, col) {
-  const gi  = movie.genreIdx;
-  const safeCol = Math.min(col, ATLAS_COLS-1);
-
-  const materials = [
+  const gi = movie.genreIdx;
+  const mesh = new THREE.Mesh(VHS_GEO, [
     MAT_SIDE,
     MAT_SIDE,
     MAT_TOP,
     MAT_BOTTOM,
-    spineMats[gi][safeCol],
+    genreSpineMats[gi], // solid genre color spine
     MAT_SIDE,
-  ];
-
-  const mesh = new THREE.Mesh(VHS_GEO, materials);
+  ]);
   mesh.castShadow    = false;
   mesh.receiveShadow = false;
   mesh.userData.movie = movie;
-
   const group = new THREE.Group();
   group.add(mesh);
   return group;
 }
 
-// ── For inspect view: build a full-detail box with poster texture ──
+// createInspectBox — only created when player picks up a box
+// Loads poster texture at this point only
 function createInspectBox(movie) {
-  const gi  = movie.genreIdx;
-  const col = Math.max(0, POOL[gi].indexOf(movie));
-
-  const atlasTex = genreAtlas[gi]?.texture;
-  const spineMat = new THREE.MeshStandardMaterial({roughness:0.18, metalness:0.04});
-  if(atlasTex){
-    spineMat.map = atlasTex.clone();
-    spineMat.map.needsUpdate = true;
-    spineMat.map.repeat.set(1/ATLAS_COLS, 1);
-    spineMat.map.offset.set(col/ATLAS_COLS, 0);
-  }
-
   const posterMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color().setHSL(movie.hue/360, 0.4, 0.2),
     roughness:0.14, metalness:0.04
@@ -426,31 +395,26 @@ function createInspectBox(movie) {
   if(movie.posterSm){
     const t = new THREE.TextureLoader().load(movie.posterSm);
     t.colorSpace = THREE.SRGBColorSpace;
-    posterMat.map = t;
-    posterMat.needsUpdate = true;
+    posterMat.map = t; posterMat.needsUpdate = true;
   }
-
-  const materials = [
+  const spineMat = new THREE.MeshStandardMaterial({
+    color: GENRES[movie.genreIdx].color, roughness:0.18, metalness:0.04
+  });
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(VHS_D, VHS_H, VHS_W), [
     new THREE.MeshStandardMaterial({color:0xddd8cc, roughness:0.2}),
     new THREE.MeshStandardMaterial({color:0xddd8cc, roughness:0.2}),
     new THREE.MeshStandardMaterial({color:0xf0e8dc, roughness:0.12, metalness:0.06}),
     new THREE.MeshStandardMaterial({color:0xc8c0b4, roughness:0.35}),
     spineMat,
     posterMat,
-  ];
-
-  const mesh = new THREE.Mesh(VHS_GEO, materials);
+  ]);
   mesh.userData.movie = movie;
   const group = new THREE.Group();
   group.add(mesh);
   return group;
 }
 
-// (spine and back tex functions replaced by atlas system above)
-
-// (back tex replaced by atlas/inspect system)
-
-// (old createVHSBox removed — new atlas-based version above)
+// (atlas system no longer used for shelf boxes)
 
 // ═══════════════════════════════════════════════
 // SHELF SYSTEM
@@ -632,19 +596,34 @@ function addShelfSign(parent, label, gi, length) {
 // ── Place all shelf units ──
 async function buildStore() {
   const st = document.getElementById('ld-st');
+  const wallLen  = isMobile ? 4 : 7;
+  const aisleLen = isMobile ? 3 : 6;
 
-  // Build atlases with yields
-  for(let gi=0; gi<GENRES.length; gi++){
-    st.textContent = `Building ${GENRES[gi].label}...`;
-    buildGenreAtlas(gi);
+  const units = [
+    [ 8.5, -2,  Math.PI, 0, 'NEW RELEASES', wallLen],
+    [ 8.5, -9,  Math.PI, 1, 'ACTION',       wallLen],
+    [ 8.5,-16,  Math.PI, 2, 'COMEDY',       wallLen],
+    [ 8.5,-23,  Math.PI, 3, 'HORROR',       wallLen],
+    [-8.5, -2,  0,       4, 'DRAMA',        wallLen],
+    [-8.5, -9,  0,       5, 'SCI-FI',       wallLen],
+    [-8.5,-16,  0,       6, 'THRILLER',     wallLen],
+    [-8.5,-23,  0,       7, 'ANIMATION',    wallLen],
+    [ 0,-10,  0,         0, 'NEW RELEASES', aisleLen],
+    [ 0,-10,  Math.PI,   1, 'ACTION',       aisleLen],
+    [ 0,-18,  0,         2, 'COMEDY',       aisleLen],
+    [ 0,-18,  Math.PI,   3, 'HORROR',       aisleLen],
+    [ 0,-26,  0,         4, 'DRAMA',        aisleLen],
+    [ 0,-26,  Math.PI,   5, 'SCI-FI',       aisleLen],
+    [ 0,-33, -Math.PI/2, 6, 'THRILLER',     isMobile ? 6 : 14],
+  ];
+
+  for(let i=0; i<units.length; i++){
+    const u = units[i];
+    st.textContent = `Placing ${u[4]}... (${i+1}/${units.length})`;
+    createShelfUnit(u[0], u[1], u[2], u[3], u[4], u[5]);
     await new Promise(r=>setTimeout(r,10));
   }
-
-  st.textContent = 'Preparing materials...';
-  buildSpineMats();
-  await new Promise(r=>setTimeout(r,10));
-
-  st.textContent = 'Placing shelves...';
+}
 
   // On mobile use shorter shelves (fewer boxes) to stay within GPU limits
   // On desktop use full length
