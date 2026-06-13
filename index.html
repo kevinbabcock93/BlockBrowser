@@ -285,74 +285,7 @@ const VHS_D  = 0.028;
 
 const texLoader = new THREE.TextureLoader();
 
-// ══════════════════════════════════════════════════
-// ATLAS SYSTEM — one texture per genre (8 total)
-// Each atlas is a horizontal strip of spine images
-// ATLAS_COLS spines wide, each spine cell CELL_W×CELL_H px
-// ══════════════════════════════════════════════════
-const ATLAS_COLS = 40;  // max movies per genre
-const CELL_W     = 64;  // px per spine cell width
-const CELL_H     = 256; // px per spine cell height
-const ATLAS_W    = ATLAS_COLS * CELL_W;
-const ATLAS_H    = CELL_H;
-
-// genreAtlas[gi] = { texture, canvas, ctx }
-const genreAtlas = [];
-
-function buildGenreAtlas(gi) {
-  const pool = POOL[gi];
-  const g    = GENRES[gi];
-  const c    = document.createElement('canvas');
-  c.width    = ATLAS_W;
-  c.height   = ATLAS_H;
-  const ctx  = c.getContext('2d');
-
-  pool.forEach((movie, col) => {
-    if(col >= ATLAS_COLS) return;
-    const ox = col * CELL_W;
-
-    // Off-white plastic base
-    ctx.fillStyle = '#e0d8cc';
-    ctx.fillRect(ox, 0, CELL_W, CELL_H);
-
-    // Colored label
-    const labelColor = `#${g.color.toString(16).padStart(6,'0')}`;
-    ctx.fillStyle = labelColor;
-    ctx.fillRect(ox+4, CELL_H*0.05, CELL_W-8, CELL_H*0.88);
-
-    // Sheen
-    const sg = ctx.createLinearGradient(ox, 0, ox+CELL_W, 0);
-    sg.addColorStop(0,   'rgba(255,255,255,0.22)');
-    sg.addColorStop(0.5, 'rgba(255,255,255,0.04)');
-    sg.addColorStop(1,   'rgba(0,0,0,0.28)');
-    ctx.fillStyle = sg;
-    ctx.fillRect(ox+4, CELL_H*0.05, CELL_W-8, CELL_H*0.88);
-
-    // Rotated title
-    ctx.save();
-    ctx.translate(ox + CELL_W/2, CELL_H * 0.5);
-    ctx.rotate(-Math.PI/2);
-    const fl = movie.title.length>20 ? 10 : movie.title.length>14 ? 12 : 14;
-    ctx.font = `bold ${fl}px Arial Black,Arial`;
-    ctx.fillStyle = 'rgba(255,255,255,0.95)';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0,0,0,0.9)';
-    ctx.shadowBlur = 3;
-    ctx.fillText(movie.title.slice(0, 20), 0, 0);
-    ctx.restore();
-
-    // Edge highlights
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.fillRect(ox, 0, 3, CELL_H);
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.fillRect(ox+CELL_W-3, 0, 3, CELL_H);
-  });
-
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  genreAtlas[gi] = { texture: tex, canvas: c, ctx };
-}
+// Atlas system removed — using solid genre colors for shelf boxes
 
 // Shared geometry and plain materials — created ONCE, reused by all boxes
 const VHS_GEO    = new THREE.BoxGeometry(VHS_D, VHS_H, VHS_W);
@@ -470,6 +403,30 @@ function tryMove(dx, dz) {
   if(!isBlocked(camera.position.x, nz)) camera.position.z = nz;
 }
 
+// Pre-built sign textures — one per genre, built once
+const signTextures = GENRES.map((g, gi) => {
+  const c = document.createElement('canvas'); c.width=256; c.height=48;
+  const x = c.getContext('2d');
+  x.fillStyle = `#${g.color.toString(16).padStart(6,'0')}`;
+  x.fillRect(0,0,256,48);
+  x.fillStyle = 'rgba(0,0,0,0.85)';
+  x.font = 'bold 22px Arial Black,Arial';
+  x.textAlign='center'; x.textBaseline='middle';
+  x.fillText(g.label, 128, 24);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+});
+const signMats = signTextures.map(t =>
+  new THREE.MeshLambertMaterial({map: t})
+);
+
+// Shared shelf plank geometry (reused across all shelves)
+const PLANK_GEO = new THREE.BoxGeometry(1, 0.018, 0.17); // scaled per shelf
+const BACK_GEO  = new THREE.BoxGeometry(1, 1, 0.04);     // scaled per shelf
+const SIDE_GEO  = new THREE.BoxGeometry(0.025, 1, 0.17); // scaled per shelf
+const SIGN_GEO  = new THREE.BoxGeometry(1, 0.25, 0.04);  // scaled per shelf
+
 function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
   const group = new THREE.Group();
   group.position.set(posX, 0, posZ);
@@ -479,55 +436,41 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
   const pool = POOL[genreIdx];
   if(!pool||!pool.length) return;
 
-  // Total shelf depth = VHS_W (cases go back into shelf) + back panel
-  const shelfDepth = VHS_W + 0.06;
+  const shelfDepth = VHS_W + 0.05;
   const shelfH     = ROWS_PER_UNIT * ROW_SPACING + 0.1;
 
-  // Shelf back panel
-  const back = new THREE.Mesh(
-    new THREE.BoxGeometry(length, shelfH, 0.04),
-    shelfBackMat
-  );
-  back.position.set(0, shelfH/2, -(shelfDepth/2));
+  // Back panel
+  const back = new THREE.Mesh(BACK_GEO, shelfBackMat);
+  back.scale.set(length, shelfH, 1);
+  back.position.set(0, shelfH/2, -shelfDepth/2);
   group.add(back);
 
-  // Shelf planks — sit at z=0 (front edge flush with spine face)
-  // Plank z center = shelfDepth/2 going back
+  // Shelf planks — one per row
   for(let r=0; r<=ROWS_PER_UNIT; r++){
-    const plank = new THREE.Mesh(
-      new THREE.BoxGeometry(length+0.04, 0.018, shelfDepth),
-      shelfMat
-    );
+    const plank = new THREE.Mesh(PLANK_GEO, shelfMat);
+    plank.scale.set(length+0.04, 1, shelfDepth/0.17);
     plank.position.set(0, r*ROW_SPACING, -shelfDepth/2);
-    plank.castShadow=true; plank.receiveShadow=true;
     group.add(plank);
   }
 
   // Side panels
   for(const sx of [-length/2-0.01, length/2+0.01]){
-    const side=new THREE.Mesh(
-      new THREE.BoxGeometry(0.025, shelfH, shelfDepth),
-      shelfMat
-    );
+    const side = new THREE.Mesh(SIDE_GEO, shelfMat);
+    side.scale.set(1, shelfH/0.17, shelfDepth/0.17);
     side.position.set(sx, shelfH/2, -shelfDepth/2);
-    side.castShadow=true;
     group.add(side);
   }
 
-  // Genre sign above shelf
-  addShelfSign(group, label, genreIdx, length);
+  // Sign — uses pre-built material, no new canvas
+  const sign = new THREE.Mesh(SIGN_GEO, signMats[genreIdx]);
+  sign.scale.set(Math.min(length, 2.5), 1, 1);
+  sign.position.set(0, shelfH + 0.18, -0.02);
+  group.add(sign);
 
-  // ── Collision box ──
-  // Transform the shelf's local AABB into world space
-  // Local bounds: x=[-length/2, length/2], z=[-shelfDepth, 0]
-  // We approximate world-space AABB (works for axis-aligned rotations)
-  const hw = length/2 + 0.1;
-  const hd = shelfDepth + 0.1;
+  // Collision
+  const hw = length/2 + 0.1, hd = shelfDepth + 0.1;
   const cos = Math.cos(rotY), sin = Math.sin(rotY);
-  // Corner points in local space, rotated
-  const corners = [
-    [-hw, -hd], [-hw, 0], [hw, -hd], [hw, 0]
-  ].map(([lx, lz]) => ({
+  const corners = [[-hw,-hd],[-hw,0],[hw,-hd],[hw,0]].map(([lx,lz])=>({
     wx: posX + lx*cos - lz*sin,
     wz: posZ + lx*sin + lz*cos,
   }));
@@ -538,11 +481,9 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
     maxZ: Math.max(...corners.map(c=>c.wz)) + 0.05,
   });
 
-  // Place boxes — spine at z=0 (front of shelf), case goes back
-  const boxCount = Math.min(Math.floor(length/BOX_ALONG_SHELF), BOXES_PER_ROW);
-  const totalWidth = boxCount * BOX_ALONG_SHELF;
-  const startX = -totalWidth/2 + BOX_ALONG_SHELF/2;
-
+  // Place boxes
+  const boxCount = Math.min(Math.floor(length / BOX_ALONG_SHELF), BOXES_PER_ROW);
+  const startX   = -(boxCount * BOX_ALONG_SHELF)/2 + BOX_ALONG_SHELF/2;
   const startOffset = genrePoolOffset[genreIdx];
   let placed = 0;
 
@@ -552,45 +493,19 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
       if(idx >= pool.length) break;
       const movie = pool[idx];
       placed++;
-      const box = createVHSBox(movie, idx % ATLAS_COLS);
-      // Box center: x along shelf, y on plank, z = -VHS_W/2 (case center goes back)
+      const box = createVHSBox(movie, col);
       box.position.set(
         startX + col*BOX_ALONG_SHELF,
-        row*ROW_SPACING + VHS_H/2 + 0.018, // sit on plank
-        -VHS_W/2                             // case center, spine flush with z=0
+        row*ROW_SPACING + VHS_H/2 + 0.018,
+        -VHS_W/2
       );
-      box.userData.shelfPos = box.position.clone();
-      box.userData.shelfRot = box.rotation.clone();
+      box.userData.shelfPos  = box.position.clone();
       box.userData.shelfGroup = group;
       group.add(box);
       allBoxes.push(box);
     }
   }
-
   genrePoolOffset[genreIdx] += placed;
-}
-
-// Genre sign canvas
-function addShelfSign(parent, label, gi, length) {
-  const cw=512,ch=80;
-  const c=document.createElement('canvas');c.width=cw;c.height=ch;
-  const x=c.getContext('2d');
-  x.fillStyle=`#${GENRES[gi].color.toString(16).padStart(6,'0')}`;
-  x.fillRect(0,0,cw,ch);
-  x.fillStyle='rgba(0,0,0,0.25)'; x.fillRect(0,ch-10,cw,10);
-  x.fillStyle='rgba(255,255,255,0.2)'; x.fillRect(0,0,cw,4);
-  x.fillStyle='rgba(0,0,0,0.88)';
-  x.font='bold 48px Arial Black,Arial';
-  x.textAlign='center';x.textBaseline='middle';
-  x.fillText(label,cw/2,ch/2-2);
-  const tex=new THREE.CanvasTexture(c);
-  tex.colorSpace=THREE.SRGBColorSpace;
-  const sign=new THREE.Mesh(
-    new THREE.BoxGeometry(Math.min(length,3.0),0.28,0.04),
-    new THREE.MeshStandardMaterial({map:tex, roughness:0.4, emissive:new THREE.Color(0xffffff), emissiveIntensity:0.08})
-  );
-  sign.position.set(0, ROWS_PER_UNIT*ROW_SPACING+0.22, -0.02);
-  parent.add(sign);
 }
 
 const isMobile = 'ontouchstart' in window;
