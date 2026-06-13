@@ -360,56 +360,34 @@ const MAT_SIDE   = new THREE.MeshLambertMaterial({color:0xddd8cc});
 const MAT_TOP    = new THREE.MeshLambertMaterial({color:0xf0e8dc});
 const MAT_BOTTOM = new THREE.MeshLambertMaterial({color:0xc8c0b4});
 
-// Per-genre shared spine materials (one per genre = 8 total)
-const genreSpineMat = []; // built after atlas
-
-function buildGenreSpineMats() {
-  for(let gi=0; gi<GENRES.length; gi++){
-    genreSpineMat[gi] = new THREE.MeshLambertMaterial({
-      map: genreAtlas[gi].texture
-    });
-  }
-}
+// Spine materials are now created per-box using texture offset/repeat on the atlas
 
 // ── Create one VHS box mesh ──
-// Uses shared geometry + shared genre atlas material with UV offset for spine
-// Total unique textures = 8 (one per genre) regardless of box count
+// Uses shared geometry + per-box spine material using texture offset/repeat
+// NO geometry cloning — texture transform selects the right atlas column
 function createVHSBox(movie, col) {
-  // We need custom UVs on the +z face (spine) to select the right cell in the atlas
-  // Three.js BoxGeometry doesn't let us easily set per-face UVs
-  // Solution: clone just the UVs for this box, offset to the right column
+  const gi = movie.genreIdx;
 
-  const geo = VHS_GEO.clone(); // must clone to set unique UVs
-
-  // UV for each face in BoxGeometry: 4 vertices per face, 2 floats each
-  // Faces order: +x(0), -x(1), +y(2), -y(3), +z(4), -z(5)
-  // UVs attribute has 24 entries (4 verts × 6 faces)
-  const uvAttr = geo.attributes.uv;
-  const gi     = movie.genreIdx;
-  const u0     = col / ATLAS_COLS;       // left edge of this spine's cell
-  const u1     = (col+1) / ATLAS_COLS;  // right edge
-
-  // +z face is face index 4, vertices 16-19 in the UV array
-  // Each vertex: (u,v) pairs
-  const faceStart = 4 * 4; // face 4, 4 verts before it
-  // Standard BoxGeometry UV for front face:
-  // v0:(0,0) v1:(1,0) v2:(0,1) v3:(1,1) → remap u to [u0,u1]
-  uvAttr.setXY(faceStart+0, u0, 0);
-  uvAttr.setXY(faceStart+1, u1, 0);
-  uvAttr.setXY(faceStart+2, u0, 1);
-  uvAttr.setXY(faceStart+3, u1, 1);
-  uvAttr.needsUpdate = true;
+  // Create a unique material for the spine face only
+  // It uses the shared genre atlas texture but with offset+repeat to show only col's cell
+  const atlasTex = genreAtlas[gi].texture;
+  const spineMat = new THREE.MeshLambertMaterial({ map: atlasTex });
+  // Clone the texture so we can set unique offset/repeat per box
+  spineMat.map = atlasTex.clone();
+  spineMat.map.needsUpdate = true;
+  spineMat.map.repeat.set(1 / ATLAS_COLS, 1);
+  spineMat.map.offset.set(col / ATLAS_COLS, 0);
 
   const materials = [
-    MAT_SIDE,                // +x
-    MAT_SIDE,                // -x
-    MAT_TOP,                 // +y
-    MAT_BOTTOM,              // -y
-    genreSpineMat[gi],       // +z SPINE ← atlas sampled at UV offset
-    MAT_SIDE,                // -z (back, faces into shelf, not visible)
+    MAT_SIDE,   // +x
+    MAT_SIDE,   // -x
+    MAT_TOP,    // +y
+    MAT_BOTTOM, // -y
+    spineMat,   // +z SPINE
+    MAT_SIDE,   // -z back (faces into shelf, not visible during browse)
   ];
 
-  const mesh = new THREE.Mesh(geo, materials);
+  const mesh = new THREE.Mesh(VHS_GEO, materials); // shared geometry, no clone
   mesh.castShadow    = false;
   mesh.receiveShadow = false;
   mesh.userData.movie = movie;
@@ -421,54 +399,39 @@ function createVHSBox(movie, col) {
 
 // ── For inspect view: build a full-detail box with poster texture ──
 function createInspectBox(movie) {
-  const geo = new THREE.BoxGeometry(VHS_D, VHS_H, VHS_W);
-
-  // Spine material (reuse atlas)
   const gi  = movie.genreIdx;
-  const col = POOL[gi].indexOf(movie);
-  const geo2 = geo.clone();
-  const uvAttr = geo2.attributes.uv;
-  const u0 = Math.max(0, col) / ATLAS_COLS;
-  const u1 = (Math.max(0,col)+1) / ATLAS_COLS;
-  const fs = 4*4;
-  uvAttr.setXY(fs+0,u0,0); uvAttr.setXY(fs+1,u1,0);
-  uvAttr.setXY(fs+2,u0,1); uvAttr.setXY(fs+3,u1,1);
-  uvAttr.needsUpdate=true;
+  const col = Math.max(0, POOL[gi].indexOf(movie));
 
-  // Poster texture loaded fresh for inspect
+  const atlasTex = genreAtlas[gi]?.texture;
+  const spineMat = new THREE.MeshStandardMaterial({roughness:0.18, metalness:0.04});
+  if(atlasTex){
+    spineMat.map = atlasTex.clone();
+    spineMat.map.needsUpdate = true;
+    spineMat.map.repeat.set(1/ATLAS_COLS, 1);
+    spineMat.map.offset.set(col/ATLAS_COLS, 0);
+  }
+
   const posterMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color().setHSL(movie.hue/360,0.4,0.2),
+    color: new THREE.Color().setHSL(movie.hue/360, 0.4, 0.2),
     roughness:0.14, metalness:0.04
   });
   if(movie.posterSm){
-    const t = texLoader.load(movie.posterSm);
+    const t = new THREE.TextureLoader().load(movie.posterSm);
     t.colorSpace = THREE.SRGBColorSpace;
     posterMat.map = t;
     posterMat.needsUpdate = true;
   }
 
-  const spineMat = new THREE.MeshStandardMaterial({
-    map: genreAtlas[gi]?.texture,
-    roughness:0.18, metalness:0.04
-  });
-  // Apply UV offset to spine material via texture offset/repeat
-  if(spineMat.map){
-    spineMat.map = spineMat.map.clone();
-    spineMat.map.offset.set(Math.max(0,col)/ATLAS_COLS, 0);
-    spineMat.map.repeat.set(1/ATLAS_COLS, 1);
-    spineMat.map.needsUpdate=true;
-  }
-
   const materials = [
-    new THREE.MeshStandardMaterial({color:0xddd8cc,roughness:0.2}),
-    new THREE.MeshStandardMaterial({color:0xddd8cc,roughness:0.2}),
-    new THREE.MeshStandardMaterial({color:0xf0e8dc,roughness:0.12,metalness:0.06}),
-    new THREE.MeshStandardMaterial({color:0xc8c0b4,roughness:0.35}),
+    new THREE.MeshStandardMaterial({color:0xddd8cc, roughness:0.2}),
+    new THREE.MeshStandardMaterial({color:0xddd8cc, roughness:0.2}),
+    new THREE.MeshStandardMaterial({color:0xf0e8dc, roughness:0.12, metalness:0.06}),
+    new THREE.MeshStandardMaterial({color:0xc8c0b4, roughness:0.35}),
     spineMat,
     posterMat,
   ];
 
-  const mesh = new THREE.Mesh(geo2, materials);
+  const mesh = new THREE.Mesh(VHS_GEO, materials);
   mesh.userData.movie = movie;
   const group = new THREE.Group();
   group.add(mesh);
@@ -663,7 +626,6 @@ function buildStore() {
   // Build one atlas texture per genre FIRST — this is the key mobile fix
   // 8 atlases total instead of 320+ individual textures
   for(let gi=0; gi<GENRES.length; gi++) buildGenreAtlas(gi);
-  buildGenreSpineMats();
   // Wall shelves — east side (x=+8.5), facing west (-x direction, rotY=Math.PI)
   createShelfUnit( 8.5, -2,  Math.PI, 0, 'NEW RELEASES', 7);
   createShelfUnit( 8.5, -9,  Math.PI, 1, 'ACTION',       7);
