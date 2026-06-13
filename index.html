@@ -233,16 +233,14 @@ const camera = new THREE.PerspectiveCamera(70, W/H, 0.01, 50);
 camera.position.set(0, 1.65, 4); // eye height 1.65m, near south entrance
 
 // ── Lighting ──
-const ambient = new THREE.AmbientLight(0xfff5e0, 0.6);
+const ambient = new THREE.AmbientLight(0xfff5e0, 1.8); // much brighter ambient
 scene.add(ambient);
 
-// Main overhead fluorescent lights
+// Main overhead fluorescent lights — lower Y to be closer to shelf level
 function addLight(x, y, z) {
-  const light = new THREE.PointLight(0xfff8e8, 1.8, 8);
+  const light = new THREE.PointLight(0xfff8e8, 2.5, 10);
   light.position.set(x, y, z);
-  light.castShadow = true;
   scene.add(light);
-  // Light fixture geometry
   const fix = new THREE.Mesh(
     new THREE.BoxGeometry(0.6, 0.04, 0.12),
     new THREE.MeshStandardMaterial({color:0xffffff, emissive:0xfff8e8, emissiveIntensity:1})
@@ -250,7 +248,11 @@ function addLight(x, y, z) {
   fix.position.set(x, y+0.02, z);
   scene.add(fix);
 }
-for(let z=3;z>=-18;z-=4) {addLight(-2,3.2,z);addLight(2,3.2,z);}
+// Lights along both sides of store at shelf height
+for(let z=2;z>=-30;z-=3){
+  addLight(-4, 2.8, z);
+  addLight( 4, 2.8, z);
+}
 
 // ── Store geometry ──
 // Floor — dark Blockbuster blue carpet
@@ -431,7 +433,10 @@ const SIGN_GEO  = new THREE.BoxGeometry(1, 0.25, 0.04);  // scaled per shelf
 
 function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
   const group = new THREE.Group();
-  group.position.set(posX, 0, posZ);
+  // Raise shelf so middle row is at eye height (1.65m)
+  // Shelf height = ROWS_PER_UNIT * ROW_SPACING = 8 * 0.20 = 1.6m
+  // Middle at 0.8m → need base at 1.65 - 0.8 = 0.85m off floor
+  group.position.set(posX, 0.05, posZ);
   group.rotation.y = rotY;
   scene.add(group);
 
