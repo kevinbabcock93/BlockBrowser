@@ -902,7 +902,13 @@ async function init(){
     document.getElementById('ld-re').style.display='block';
     return;
   }
-  st.textContent=`Ready! (${allBoxes.length} boxes)`;
+  st.textContent=`Ready! (${allBoxes.length} boxes placed)`;
+  // Show box count briefly in HUD
+  const countEl = document.createElement('div');
+  countEl.style.cssText='position:fixed;top:100px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);color:#0f0;font-family:monospace;font-size:14px;padding:6px 12px;border-radius:4px;z-index:999;';
+  countEl.textContent = `${allBoxes.length} boxes in scene`;
+  document.body.appendChild(countEl);
+  setTimeout(()=>countEl.remove(), 8000);
   await new Promise(r=>setTimeout(r,300));
   document.getElementById('loading').classList.add('out');
   setTimeout(()=>document.getElementById('loading').style.display='none',600);
