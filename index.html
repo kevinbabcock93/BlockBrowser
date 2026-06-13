@@ -386,6 +386,8 @@ const genrePoolOffset = new Array(GENRES.length).fill(0);
 // All interactive VHS boxes
 const allBoxes = [];
 
+const colliders = [];
+
 function isBlocked(x, z) {
   // Outer store walls
   if(x < -9.2 || x > 9.2 || z < -33 || z > 4.8) return true;
@@ -898,20 +900,6 @@ async function init(){
     document.getElementById('ld-re').style.display='block';
     return;
   }
-  // Debug panel — shows on screen so we can diagnose mobile
-  const dbg = document.createElement('div');
-  dbg.style.cssText='position:fixed;top:60px;left:10px;background:rgba(0,0,0,0.85);color:#0f0;font-family:monospace;font-size:11px;padding:8px;border-radius:4px;z-index:999;max-width:280px;pointer-events:none;';
-  dbg.innerHTML = `
-    Genres loaded: ${POOL.map((p,i)=>GENRES[i].label.slice(0,3)+':'+p.length).join(' ')}<br>
-    Total boxes: ${allBoxes.length}<br>
-    Mobile: ${isMobile}<br>
-    WebGL: ${renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'}<br>
-    Max textures: ${renderer.capabilities.maxTextures}<br>
-    Pool[0] sample: ${POOL[0]?.[0]?.title||'EMPTY'}<br>
-    genreOffset: ${genrePoolOffset.join(',')}<br>
-  `;
-  document.body.appendChild(dbg);
-  setTimeout(()=>dbg.remove(), 15000); // remove after 15 seconds
   st.textContent='Ready!';
   await new Promise(r=>setTimeout(r,300));
   document.getElementById('loading').classList.add('out');
