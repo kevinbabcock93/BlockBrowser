@@ -488,6 +488,8 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
   const startX   = -(boxCount * BOX_ALONG_SHELF)/2 + BOX_ALONG_SHELF/2;
   const startOffset = genrePoolOffset[genreIdx];
   let placed = 0;
+  console.log(`Shelf gi=${genreIdx} length=${length} boxCount=${boxCount} poolLen=${pool.length} offset=${startOffset}`);
+  if(pool.length === 0) { console.warn('POOL EMPTY for genre', genreIdx); return; }
 
   for(let row=0; row<ROWS_PER_UNIT; row++){
     for(let col=0; col<boxCount; col++){
@@ -900,7 +902,7 @@ async function init(){
     document.getElementById('ld-re').style.display='block';
     return;
   }
-  st.textContent='Ready!';
+  st.textContent=`Ready! (${allBoxes.length} boxes)`;
   await new Promise(r=>setTimeout(r,300));
   document.getElementById('loading').classList.add('out');
   setTimeout(()=>document.getElementById('loading').style.display='none',600);
