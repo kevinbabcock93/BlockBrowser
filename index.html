@@ -593,6 +593,8 @@ function addShelfSign(parent, label, gi, length) {
   parent.add(sign);
 }
 
+const isMobile = 'ontouchstart' in window;
+
 // ── Place all shelf units ──
 async function buildStore() {
   const st = document.getElementById('ld-st');
@@ -625,48 +627,12 @@ async function buildStore() {
   }
 }
 
-  // On mobile use shorter shelves (fewer boxes) to stay within GPU limits
-  // On desktop use full length
-  const wallLen  = isMobile ? 4 : 7;
-  const aisleLen = isMobile ? 3 : 6;
-
-  const units = [
-    // Wall shelves east
-    [ 8.5, -2,  Math.PI, 0, 'NEW RELEASES', wallLen],
-    [ 8.5, -9,  Math.PI, 1, 'ACTION',       wallLen],
-    [ 8.5,-16,  Math.PI, 2, 'COMEDY',       wallLen],
-    [ 8.5,-23,  Math.PI, 3, 'HORROR',       wallLen],
-    // Wall shelves west
-    [-8.5, -2,  0,       4, 'DRAMA',        wallLen],
-    [-8.5, -9,  0,       5, 'SCI-FI',       wallLen],
-    [-8.5,-16,  0,       6, 'THRILLER',     wallLen],
-    [-8.5,-23,  0,       7, 'ANIMATION',    wallLen],
-    // Aisle 1
-    [ 0,-10,  0,         0, 'NEW RELEASES', aisleLen],
-    [ 0,-10,  Math.PI,   1, 'ACTION',       aisleLen],
-    // Aisle 2
-    [ 0,-18,  0,         2, 'COMEDY',       aisleLen],
-    [ 0,-18,  Math.PI,   3, 'HORROR',       aisleLen],
-    // Aisle 3
-    [ 0,-26,  0,         4, 'DRAMA',        aisleLen],
-    [ 0,-26,  Math.PI,   5, 'SCI-FI',       aisleLen],
-    // Back wall
-    [ 0,-33,  -Math.PI/2, 6, 'THRILLER',   isMobile ? 6 : 14],
-  ];
-
-  for(const u of units){
-    createShelfUnit(u[0], u[1], u[2], u[3], u[4], u[5]);
-    await new Promise(r=>setTimeout(r,10)); // yield between each shelf
-  }
-}
-
 // ═══════════════════════════════════════════════
 // PLAYER CONTROLS
 // ═══════════════════════════════════════════════
 const controls = new PointerLockControls(camera, renderer.domElement);
 scene.add(controls.getObject());
 
-const isMobile = 'ontouchstart' in window;
 
 // Update HUD for mobile
 if(isMobile){
