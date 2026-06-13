@@ -297,24 +297,36 @@ function loadPosterTex(url) {
   return tex;
 }
 
-// ── Create a spine canvas texture for a movie ──
-// Spine shows title rotated 90°, colored background
+// ── Spine texture — narrow 2.8cm edge, title vertical ──
 function makeSpineTex(movie) {
-  const cw=32, ch=256;
+  const cw=64, ch=512;
   const c=document.createElement('canvas'); c.width=cw; c.height=ch;
   const x=c.getContext('2d');
-  x.fillStyle=movie.genreColor||'#1a1a2e'; x.fillRect(0,0,cw,ch);
-  // Gradient overlay
-  const g=x.createLinearGradient(0,0,0,ch);
-  g.addColorStop(0,'rgba(255,255,255,0.12)');g.addColorStop(1,'rgba(0,0,0,0.3)');
-  x.fillStyle=g; x.fillRect(0,0,cw,ch);
-  // Title rotated
+  // Off-white plastic base
+  x.fillStyle='#e0d8cc'; x.fillRect(0,0,cw,ch);
+  // Colored label (most of the spine)
+  x.fillStyle=movie.genreColor||'#1a1a2e';
+  x.fillRect(5, ch*0.06, cw-10, ch*0.86);
+  // Gradient sheen
+  const g=x.createLinearGradient(0,0,cw,0);
+  g.addColorStop(0,'rgba(255,255,255,0.18)');
+  g.addColorStop(0.5,'rgba(255,255,255,0.04)');
+  g.addColorStop(1,'rgba(0,0,0,0.22)');
+  x.fillStyle=g; x.fillRect(5,ch*0.06,cw-10,ch*0.86);
+  // Title rotated vertical
   x.save();
-  x.translate(cw/2,ch*0.8);x.rotate(-Math.PI/2);
-  x.fillStyle='rgba(255,215,0,0.95)';
-  x.font=`bold 11px Arial`; x.textAlign='center'; x.textBaseline='middle';
-  x.fillText(movie.title.slice(0,22),0,0);
+  x.translate(cw/2, ch*0.5);
+  x.rotate(-Math.PI/2);
+  const fl = movie.title.length>20?13:movie.title.length>14?16:19;
+  x.font=`bold ${fl}px Arial Black,Arial`;
+  x.fillStyle='rgba(255,255,255,0.96)';
+  x.textAlign='center'; x.textBaseline='middle';
+  x.shadowColor='rgba(0,0,0,0.7)'; x.shadowBlur=3;
+  x.fillText(movie.title.slice(0,24),0,0);
   x.restore();
+  // Edge highlights
+  x.fillStyle='rgba(255,255,255,0.45)'; x.fillRect(0,0,4,ch);
+  x.fillStyle='rgba(0,0,0,0.3)'; x.fillRect(cw-4,0,4,ch);
   const tex=new THREE.CanvasTexture(c);
   tex.colorSpace=THREE.SRGBColorSpace;
   return tex;
@@ -360,44 +372,50 @@ function makeBackTex(movie) {
   return tex;
 }
 
-// ── Plain plastic material ──
-function plasticMat(color=0xeeeeee) {
-  return new THREE.MeshStandardMaterial({
-    color, roughness:0.15, metalness:0.05,
-    envMapIntensity:0.8,
-  });
-}
-
 // ── Create one VHS box mesh ──
+// On the shelf: player looks at the SPINE (the narrow 2.8cm deep face)
+// The box sits with:
+//   - Its HEIGHT (VHS_H=19cm) going up
+//   - Its WIDTH (VHS_W=10.4cm) going into the shelf (depth direction)
+//   - Its DEPTH (VHS_D=2.8cm) going along the shelf (what player sees)
+//
+// BoxGeometry(w, h, d) face indices:
+//   0=+x(right) 1=-x(left) 2=+y(top) 3=-y(bot) 4=+z(front) 5=-z(back)
+//
+// We build it as BoxGeometry(VHS_D, VHS_H, VHS_W) so that:
+//   +z face (front) = spine face (2.8cm wide) → faces player ✓
+//   +x/-x faces = left/right edges (also 2.8cm) → thin edges
+//   +y/-y = top/bottom of case
+//   -z face (back) = back of case going into shelf
+//   right(+x)/left(-x) = narrow side edges of case
 function createVHSBox(movie) {
   const group = new THREE.Group();
 
-  // Geometry — real VHS proportions
-  const geo = new THREE.BoxGeometry(VHS_W, VHS_H, VHS_D);
+  // KEY: use VHS_D as width (what player sees face-on = spine)
+  //       use VHS_H as height
+  //       use VHS_W as depth (goes into shelf)
+  const geo = new THREE.BoxGeometry(VHS_D, VHS_H, VHS_W);
 
-  // Poster texture for front
   const posterTex = movie.posterSm ? loadPosterTex(movie.posterSm) : null;
   const spineTex  = makeSpineTex(movie);
   const backTex   = makeBackTex(movie);
-
-  // White/off-white plastic case color
-  const caseColor = 0xddd8cc;
+  const caseColor = 0xddd8cc; // off-white plastic
 
   const materials = [
-    // right face (+x) — spine (title visible when shelf browsing)
-    new THREE.MeshStandardMaterial({map:spineTex, roughness:0.2, metalness:0.05}),
-    // left face (-x) — spine back
-    new THREE.MeshStandardMaterial({color:caseColor, roughness:0.2, metalness:0.05}),
-    // top (+y)
-    new THREE.MeshStandardMaterial({color:caseColor, roughness:0.15, metalness:0.05}),
-    // bottom (-y)
-    new THREE.MeshStandardMaterial({color:0xcccccc, roughness:0.3}),
-    // front (+z) — poster / cover art
+    // +x right edge — thin plastic side
+    new THREE.MeshStandardMaterial({color:caseColor, roughness:0.2, metalness:0.04}),
+    // -x left edge — thin plastic side
+    new THREE.MeshStandardMaterial({color:caseColor, roughness:0.2, metalness:0.04}),
+    // +y top — plastic top edge (catches light beautifully)
+    new THREE.MeshStandardMaterial({color:0xf0e8dc, roughness:0.12, metalness:0.06}),
+    // -y bottom
+    new THREE.MeshStandardMaterial({color:0xc8c0b4, roughness:0.35}),
+    // +z SPINE — what player sees on shelf (narrow 2.8cm face)
+    new THREE.MeshStandardMaterial({map:spineTex, roughness:0.18, metalness:0.04}),
+    // -z BACK of case — faces into shelf (poster art here for when picked up)
     posterTex
-      ? new THREE.MeshStandardMaterial({map:posterTex, roughness:0.15, metalness:0.05})
-      : new THREE.MeshStandardMaterial({color:movie.hue?`hsl(${movie.hue},40%,25%)`:'#222', roughness:0.2}),
-    // back (-z) — back cover
-    new THREE.MeshStandardMaterial({map:backTex, roughness:0.2, metalness:0.02}),
+      ? new THREE.MeshStandardMaterial({map:posterTex, roughness:0.14, metalness:0.04})
+      : new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(movie.hue/360,0.4,0.2), roughness:0.2}),
   ];
 
   const mesh = new THREE.Mesh(geo, materials);
@@ -405,7 +423,6 @@ function createVHSBox(movie) {
   mesh.receiveShadow = true;
   mesh.userData.movie = movie;
   group.add(mesh);
-
   return group;
 }
 
@@ -431,11 +448,17 @@ const BOX_SPACING   = VHS_D + 0.005;     // boxes packed spine-out along Z-ish a
 //   - Boxes are arranged side by side along the shelf LENGTH
 //   - The "width" of shelf space each box takes = VHS_W (0.104m)
 // So along shelf axis: VHS_W + gap per box
-const BOX_ALONG_SHELF = VHS_W + 0.005;
+// Each box takes VHS_D width along shelf (spine faces out, case goes back into shelf)
+// Plus tiny gap between spines
+const BOX_ALONG_SHELF = VHS_D + 0.003;
 
 // Shelf plank material
 const shelfMat = new THREE.MeshStandardMaterial({color:0x3a2208, roughness:0.8, metalness:0.05});
 const shelfBackMat = new THREE.MeshStandardMaterial({color:0x241405, roughness:0.9});
+
+// Track how many movies from each genre pool have been used across all shelf units
+// so no movie ever appears twice in the entire store
+const genrePoolOffset = new Array(GENRES.length).fill(0);
 
 // All interactive VHS boxes
 const allBoxes = [];
@@ -482,29 +505,26 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
   // Genre sign above shelf
   addShelfSign(group, label, genreIdx, length);
 
-  // Place boxes — spine out, packed along shelf length
+  // Place boxes — each movie used at most once across the entire store
   const boxCount = Math.min(Math.floor(length/BOX_ALONG_SHELF), BOXES_PER_ROW);
   const totalWidth = boxCount * BOX_ALONG_SHELF;
   const startX = -totalWidth/2 + BOX_ALONG_SHELF/2;
 
-  let poolIdx = 0;
+  const startOffset = genrePoolOffset[genreIdx];
+  let placed = 0;
+
   for(let row=0; row<ROWS_PER_UNIT; row++){
     for(let col=0; col<boxCount; col++){
-      const movie = pool[poolIdx % pool.length];
-      poolIdx++;
+      const idx = startOffset + placed;
+      if(idx >= pool.length) break; // no more unique movies — leave slot empty
+      const movie = pool[idx];
+      placed++;
       const box = createVHSBox(movie);
-      // Position: spine faces +z (toward player in aisle)
-      // box rotated so spine is visible when looking at shelf
       box.position.set(
         startX + col*BOX_ALONG_SHELF,
         row*ROW_SPACING + VHS_H/2 + 0.018,
-        0 // sitting on shelf plank, depth into shelf
+        VHS_W/2
       );
-      // Box default orientation: front face is +z
-      // For spine-out: rotate so the narrow side (depth VHS_D) faces the aisle
-      // and the wide face (front poster) faces INTO the shelf
-      // Rotate 90° around Y so the right face (spine) faces +z
-      box.rotation.y = Math.PI/2;
       box.userData.shelfPos = box.position.clone();
       box.userData.shelfRot = box.rotation.clone();
       box.userData.shelfGroup = group;
@@ -512,6 +532,9 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
       allBoxes.push(box);
     }
   }
+
+  // Advance the global offset so next shelf unit using this genre starts fresh
+  genrePoolOffset[genreIdx] += placed;
 }
 
 // Genre sign canvas
@@ -689,11 +712,11 @@ function openInspect(boxGroup) {
   inspectBox.position.set(0,0,0);
   inspectBox.rotation.set(0,0,0);
 
-  // Load large poster
+  // Load larger poster onto the back face (index 5 = -z = poster face)
   if(movie.posterSm){
     const lgTex = texLoader.load(movie.posterSm);
     lgTex.colorSpace = THREE.SRGBColorSpace;
-    inspectBox.children[0].material[4] = new THREE.MeshStandardMaterial({
+    inspectBox.children[0].material[5] = new THREE.MeshStandardMaterial({
       map:lgTex, roughness:0.12, metalness:0.04
     });
   }
@@ -728,7 +751,7 @@ function resizeInspect() {
 
 // ── Inspect drag to rotate ──
 let isDragging=false, lastX=0, lastY=0;
-let rotX=0.1, rotY2=-0.3; // slight initial angle to show it's 3D
+let rotX=0.1, rotY2=Math.PI; // start showing poster face (+z is spine, -z is poster, so rotate 180° to show poster)
 
 inspectCanvas.addEventListener('mousedown', e=>{isDragging=true;lastX=e.clientX;lastY=e.clientY;});
 window.addEventListener('mouseup', ()=>isDragging=false);
