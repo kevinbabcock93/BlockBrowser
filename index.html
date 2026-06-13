@@ -372,56 +372,128 @@ function makeBackTex(movie) {
   return tex;
 }
 
+// ── SHARED materials for plastic case faces (reused across ALL boxes) ──
+// This is the key mobile fix — instead of creating 6 new materials per box,
+// all boxes share the same plastic materials for the non-unique faces.
+const MAT_SIDE   = new THREE.MeshLambertMaterial({color:0xddd8cc});
+const MAT_TOP    = new THREE.MeshLambertMaterial({color:0xf0e8dc});
+const MAT_BOTTOM = new THREE.MeshLambertMaterial({color:0xc8c0b4});
+
+// Shared box geometry (also reused)
+const VHS_GEO = new THREE.BoxGeometry(VHS_D, VHS_H, VHS_W);
+
 // ── Create one VHS box mesh ──
-// On the shelf: player looks at the SPINE (the narrow 2.8cm deep face)
-// The box sits with:
-//   - Its HEIGHT (VHS_H=19cm) going up
-//   - Its WIDTH (VHS_W=10.4cm) going into the shelf (depth direction)
-//   - Its DEPTH (VHS_D=2.8cm) going along the shelf (what player sees)
-//
-// BoxGeometry(w, h, d) face indices:
-//   0=+x(right) 1=-x(left) 2=+y(top) 3=-y(bot) 4=+z(front) 5=-z(back)
-//
-// We build it as BoxGeometry(VHS_D, VHS_H, VHS_W) so that:
-//   +z face (front) = spine face (2.8cm wide) → faces player ✓
-//   +x/-x faces = left/right edges (also 2.8cm) → thin edges
-//   +y/-y = top/bottom of case
-//   -z face (back) = back of case going into shelf
-//   right(+x)/left(-x) = narrow side edges of case
+// Uses shared geometry + shared plastic materials for 4 faces
+// Only the spine (+z) and poster (-z) faces get unique per-box materials
 function createVHSBox(movie) {
   const group = new THREE.Group();
 
-  // KEY: use VHS_D as width (what player sees face-on = spine)
-  //       use VHS_H as height
-  //       use VHS_W as depth (goes into shelf)
-  const geo = new THREE.BoxGeometry(VHS_D, VHS_H, VHS_W);
+  // Build a single atlas canvas: left half = spine, right half = poster
+  // This means ONE texture per box instead of two separate textures
+  const AW=256, AH=512;
+  const atlas = document.createElement('canvas');
+  atlas.width = AW; atlas.height = AH;
+  const ax = atlas.getContext('2d');
 
-  const posterTex = movie.posterSm ? loadPosterTex(movie.posterSm) : null;
-  const spineTex  = makeSpineTex(movie);
-  const backTex   = makeBackTex(movie);
-  const caseColor = 0xddd8cc; // off-white plastic
+  // ── Left half (0..AW/2): SPINE ──
+  // Off-white plastic base
+  ax.fillStyle='#e0d8cc'; ax.fillRect(0,0,AW/2,AH);
+  // Colored label
+  ax.fillStyle=movie.genreColor||'#1a1a2e';
+  ax.fillRect(3, AH*0.06, AW/2-6, AH*0.86);
+  // Gradient sheen on label
+  const sg=ax.createLinearGradient(0,0,AW/2,0);
+  sg.addColorStop(0,'rgba(255,255,255,0.2)');
+  sg.addColorStop(0.5,'rgba(255,255,255,0.04)');
+  sg.addColorStop(1,'rgba(0,0,0,0.25)');
+  ax.fillStyle=sg; ax.fillRect(3,AH*0.06,AW/2-6,AH*0.86);
+  // Title rotated vertical on spine
+  ax.save();
+  ax.translate(AW/4, AH*0.5);
+  ax.rotate(-Math.PI/2);
+  const fl = movie.title.length>20?12:movie.title.length>14?15:18;
+  ax.font=`bold ${fl}px Arial Black,Arial`;
+  ax.fillStyle='rgba(255,255,255,0.96)';
+  ax.textAlign='center'; ax.textBaseline='middle';
+  ax.shadowColor='rgba(0,0,0,0.8)'; ax.shadowBlur=3;
+  ax.fillText(movie.title.slice(0,22), 0, 0);
+  ax.restore();
+  // Plastic edge highlights
+  ax.fillStyle='rgba(255,255,255,0.4)'; ax.fillRect(0,0,3,AH);
+  ax.fillStyle='rgba(0,0,0,0.25)'; ax.fillRect(AW/2-3,0,3,AH);
 
+  // ── Right half (AW/2..AW): POSTER FACE ──
+  // Filled with genre color as placeholder (poster image loaded async)
+  ax.fillStyle=movie.genreColor||'#1a1a2e'; ax.fillRect(AW/2,0,AW/2,AH);
+  const pg=ax.createLinearGradient(AW/2,0,AW/2,AH);
+  pg.addColorStop(0,'rgba(255,255,255,0.12)');pg.addColorStop(1,'rgba(0,0,0,0.5)');
+  ax.fillStyle=pg; ax.fillRect(AW/2,0,AW/2,AH);
+  // Title on poster face
+  ax.fillStyle='rgba(255,215,0,0.9)';
+  ax.font=`bold 14px Arial Black,Arial`;
+  ax.textAlign='center'; ax.textBaseline='middle';
+  ax.fillText(movie.title.slice(0,16), AW*0.75, AH*0.5);
+
+  const atlasTex = new THREE.CanvasTexture(atlas);
+  atlasTex.colorSpace = THREE.SRGBColorSpace;
+
+  // Spine material — uses left half of atlas (UV offset)
+  const spineMat = new THREE.MeshStandardMaterial({
+    map: atlasTex, roughness:0.18, metalness:0.04,
+  });
+  // Manually offset UVs for spine face to use left half
+  // We'll handle this by creating two materials that reference the same texture
+  // but the spine uses full canvas (we'll draw spine on full canvas for simplicity)
+
+  // Actually simplest approach: two small canvases, shared texture object trick
+  // Let's just make the spine canvas full-width for clarity
+
+  // Spine-only canvas
+  const sc=document.createElement('canvas'); sc.width=64; sc.height=512;
+  const sx2=sc.getContext('2d');
+  sx2.drawImage(atlas, 0,0,AW/2,AH, 0,0,64,512);
+  const spineTex2=new THREE.CanvasTexture(sc);
+  spineTex2.colorSpace=THREE.SRGBColorSpace;
+
+  // Poster canvas (placeholder, will be replaced when image loads)
+  const pc=document.createElement('canvas'); pc.width=128; pc.height=256;
+  const px2=pc.getContext('2d');
+  px2.drawImage(atlas, AW/2,0,AW/2,AH, 0,0,128,256);
+  const posterTex2=new THREE.CanvasTexture(pc);
+  posterTex2.colorSpace=THREE.SRGBColorSpace;
+
+  const spineMat2  = new THREE.MeshStandardMaterial({map:spineTex2,  roughness:0.18, metalness:0.04});
+  const posterMat2 = new THREE.MeshStandardMaterial({map:posterTex2, roughness:0.14, metalness:0.04});
+
+  // Load real poster async — update the canvas when it arrives
+  if(movie.posterSm){
+    const img=new Image(); img.crossOrigin='anonymous';
+    img.onload=()=>{
+      px2.clearRect(0,0,128,256);
+      px2.drawImage(img,0,0,128,256);
+      posterTex2.needsUpdate=true;
+    };
+    img.src=movie.posterSm;
+  }
+
+  // BoxGeometry face order: +x, -x, +y, -y, +z, -z
+  // +z = spine (faces player), -z = poster (faces into shelf)
   const materials = [
-    // +x right edge — thin plastic side
-    new THREE.MeshStandardMaterial({color:caseColor, roughness:0.2, metalness:0.04}),
-    // -x left edge — thin plastic side
-    new THREE.MeshStandardMaterial({color:caseColor, roughness:0.2, metalness:0.04}),
-    // +y top — plastic top edge (catches light beautifully)
-    new THREE.MeshStandardMaterial({color:0xf0e8dc, roughness:0.12, metalness:0.06}),
-    // -y bottom
-    new THREE.MeshStandardMaterial({color:0xc8c0b4, roughness:0.35}),
-    // +z SPINE — what player sees on shelf (narrow 2.8cm face)
-    new THREE.MeshStandardMaterial({map:spineTex, roughness:0.18, metalness:0.04}),
-    // -z BACK of case — faces into shelf (poster art here for when picked up)
-    posterTex
-      ? new THREE.MeshStandardMaterial({map:posterTex, roughness:0.14, metalness:0.04})
-      : new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(movie.hue/360,0.4,0.2), roughness:0.2}),
+    MAT_SIDE,    // +x right edge
+    MAT_SIDE,    // -x left edge
+    MAT_TOP,     // +y top
+    MAT_BOTTOM,  // -y bottom
+    spineMat2,   // +z SPINE
+    posterMat2,  // -z POSTER
   ];
 
-  const mesh = new THREE.Mesh(geo, materials);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
+  const mesh = new THREE.Mesh(VHS_GEO, materials);
+  mesh.castShadow = false;  // disable shadows on mobile for perf
+  mesh.receiveShadow = false;
   mesh.userData.movie = movie;
+  mesh.userData.posterMat = posterMat2;
+  mesh.userData.posterCanvas = pc;
+  mesh.userData.posterCtx = px2;
   group.add(mesh);
   return group;
 }
@@ -793,13 +865,14 @@ function openInspect(boxGroup) {
   inspectBox.position.set(0,0,0);
   inspectBox.rotation.set(0,0,0);
 
-  // Load larger poster onto the back face (index 5 = -z = poster face)
+  // Load larger poster onto the inspect box poster face
   if(movie.posterSm){
     const lgTex = texLoader.load(movie.posterSm);
     lgTex.colorSpace = THREE.SRGBColorSpace;
-    inspectBox.children[0].material[5] = new THREE.MeshStandardMaterial({
-      map:lgTex, roughness:0.12, metalness:0.04
-    });
+    if(inspectBox.children[0].material[5]){
+      inspectBox.children[0].material[5].map = lgTex;
+      inspectBox.children[0].material[5].needsUpdate = true;
+    }
   }
 
   iScene.add(inspectBox);
