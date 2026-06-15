@@ -3,1014 +3,496 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>BlockBrowser</title>
+<title>VHS Box Test</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=VT323&family=Barlow:wght@400;600&display=swap');
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{background:#0a0a0a;overflow:hidden;width:100vw;height:100vh;font-family:'Barlow',sans-serif;}
-  #app{width:100vw;height:100vh;position:relative;}
+  body{background:#111;overflow:hidden;width:100vw;height:100vh;touch-action:none;}
   canvas{display:block;}
-
-  /* ── HUD ── */
-  #hud{position:fixed;inset:0;pointer-events:none;z-index:20;}
-
-  #store-sign{
-    position:absolute;top:16px;left:50%;transform:translateX(-50%);
-    background:#FFD700;color:#1a1a1a;font-family:'Bebas Neue',cursive;
-    font-size:22px;letter-spacing:4px;padding:5px 22px 3px;border-radius:2px;
-    box-shadow:0 0 20px rgba(255,215,0,0.6);border:3px solid #b8860b;white-space:nowrap;
-  }
-  #store-sign span{color:#1565C0;}
-
-  #section-label{
-    position:absolute;top:60px;left:50%;transform:translateX(-50%);
-    font-family:'VT323',monospace;font-size:20px;color:#FFD700;letter-spacing:3px;
-    text-shadow:0 0 8px rgba(255,215,0,0.6);opacity:0;transition:opacity 0.3s;
-    background:rgba(0,0,0,0.5);padding:3px 12px;border-radius:3px;white-space:nowrap;
-  }
-  #section-label.show{opacity:1;}
-
-  #crosshair{
-    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-    width:14px;height:14px;pointer-events:none;
-  }
-  #crosshair::before,#crosshair::after{content:'';position:absolute;background:rgba(255,255,255,0.75);}
-  #crosshair::before{width:1.5px;height:100%;left:50%;transform:translateX(-50%);}
-  #crosshair::after{height:1.5px;width:100%;top:50%;transform:translateY(-50%);}
-
-  #hint{
-    position:absolute;bottom:80px;left:50%;transform:translateX(-50%);
-    font-family:'VT323',monospace;font-size:16px;color:#FFD700;letter-spacing:2px;
-    opacity:0;transition:opacity 0.2s;background:rgba(0,0,0,0.55);
-    padding:4px 14px;border-radius:4px;white-space:nowrap;pointer-events:none;
-  }
-  #hint.show{opacity:1;}
-
-  #controls{
-    position:absolute;bottom:18px;left:50%;transform:translateX(-50%);
-    display:flex;gap:6px;
-  }
-  .ck{background:rgba(0,0,0,0.75);border:1px solid rgba(255,255,255,0.15);
-    border-radius:5px;padding:4px 10px;font-size:10px;color:rgba(255,255,255,0.6);
-    letter-spacing:1px;white-space:nowrap;}
-  .ck b{color:#FFD700;font-family:'VT323',monospace;font-size:13px;}
-
-  /* ── VHS INSPECT OVERLAY ── */
-  #inspect{
-    position:fixed;inset:0;z-index:100;display:none;
-    background:rgba(0,0,0,0);transition:background 0.4s;
-  }
-  #inspect.open{display:flex;background:rgba(0,0,0,0.7);}
-  #inspect-canvas-wrap{
-    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  }
-  /* The Three.js renderer for the inspect view is placed here */
-  #inspect-3d{width:100%;height:100%;cursor:grab;}
-  #inspect-3d:active{cursor:grabbing;}
-
-  /* Info panel */
-  #info-panel{
-    position:absolute;bottom:0;left:0;right:0;
-    background:linear-gradient(0deg,rgba(0,0,0,0.95) 60%,rgba(0,0,0,0) 100%);
-    padding:24px 24px 20px;
-    transform:translateY(100%);transition:transform 0.4s;
-    pointer-events:all;
-  }
-  #inspect.open #info-panel{transform:translateY(0);}
-  #info-title{font-family:'Bebas Neue',cursive;font-size:26px;color:#FFD700;letter-spacing:2px;line-height:1.1;margin-bottom:2px;}
-  #info-meta{font-size:11px;color:rgba(255,255,255,0.45);letter-spacing:1px;margin-bottom:8px;}
-  #info-tags{display:flex;gap:6px;margin-bottom:10px;}
-  .itag{font-size:9px;padding:2px 8px;border-radius:3px;letter-spacing:1px;text-transform:uppercase;font-weight:700;}
-  .itag.g{color:#fff;}.itag.r{background:#FFD700;color:#111;}
-  #info-desc{font-size:12px;color:rgba(255,255,255,0.75);line-height:1.55;margin-bottom:14px;max-width:500px;}
-  #info-btns{display:flex;gap:8px;}
-  #btn-watch{flex:1;background:#FFD700;color:#111;border:none;font-family:'Bebas Neue',cursive;font-size:18px;letter-spacing:2px;padding:10px;border-radius:4px;cursor:pointer;max-width:220px;}
-  #btn-watch:hover{background:#ffe84d;}
-  #btn-back{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.7);border:1px solid rgba(255,255,255,0.2);font-family:'Bebas Neue',cursive;font-size:18px;letter-spacing:1px;padding:10px 18px;border-radius:4px;cursor:pointer;}
-  #btn-back:hover{background:rgba(255,255,255,0.14);}
-  #rotate-hint{font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:1px;margin-top:8px;font-family:'VT323',monospace;font-size:13px;}
-
-  /* Loading */
-  #loading{position:fixed;inset:0;background:#000;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.6s;}
-  #loading.out{opacity:0;pointer-events:none;}
-  #ld-logo{font-family:'Bebas Neue',cursive;font-size:clamp(40px,10vw,68px);letter-spacing:6px;color:#FFD700;text-shadow:0 0 30px rgba(255,215,0,0.4);margin-bottom:6px;}
-  #ld-logo span{color:#1565C0;}
-  #ld-sub{font-family:'VT323',monospace;font-size:15px;color:rgba(255,255,255,0.4);letter-spacing:3px;margin-bottom:24px;}
-  #ld-bw{width:220px;height:5px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden;}
-  #ld-br{height:100%;width:0%;background:#FFD700;border-radius:3px;transition:width 0.2s;box-shadow:0 0 8px rgba(255,215,0,0.6);}
-  #ld-st{font-size:10px;color:rgba(255,255,255,0.28);margin-top:9px;letter-spacing:1px;}
-  #ld-re{margin-top:16px;background:transparent;border:1px solid rgba(255,215,0,0.5);color:#FFD700;font-family:'Bebas Neue',cursive;font-size:16px;letter-spacing:2px;padding:7px 20px;border-radius:4px;cursor:pointer;display:none;}
+  #info{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    color:rgba(255,255,255,0.5);font-family:monospace;font-size:12px;
+    text-align:center;pointer-events:none;}
+  #title{position:fixed;top:20px;left:50%;transform:translateX(-50%);
+    color:#FFD700;font-family:Arial Black,Arial;font-size:14px;letter-spacing:2px;
+    text-align:center;pointer-events:none;}
 </style>
 </head>
 <body>
-<div id="loading">
-  <div id="ld-logo">BLOCK<span>BROWSER</span></div>
-  <div id="ld-sub">STOCKING THE SHELVES...</div>
-  <div id="ld-bw"><div id="ld-br"></div></div>
-  <div id="ld-st">Loading Three.js...</div>
-  <button id="ld-re" onclick="init()">RETRY</button>
-</div>
-
-<div id="app">
-  <!-- Main shelf view -->
-  <div id="shelf-view"></div>
-
-  <div id="hud">
-    <div id="store-sign">BLOCK<span>BROWSER</span></div>
-    <div id="section-label"></div>
-    <div id="crosshair"></div>
-    <div id="hint">[ CLICK ] PICK UP</div>
-    <div id="controls">
-      <div class="ck"><b>W A S D</b> Move</div>
-      <div class="ck"><b>Mouse</b> Look</div>
-      <div class="ck"><b>Click</b> Pick Up</div>
-      <div class="ck"><b>ESC</b> Put Back</div>
-    </div>
-  </div>
-
-  <!-- Inspect overlay -->
-  <div id="inspect">
-    <div id="inspect-canvas-wrap">
-      <canvas id="inspect-3d"></canvas>
-    </div>
-    <div id="info-panel">
-      <div id="info-title">Movie Title</div>
-      <div id="info-meta">Year · Rating</div>
-      <div id="info-tags">
-        <span class="itag g" id="info-genre">Genre</span>
-        <span class="itag r" id="info-rating">★ 0.0</span>
-      </div>
-      <div id="info-desc">Description</div>
-      <div id="info-btns">
-        <button id="btn-watch" onclick="watchMovie()">▶ WATCH TONIGHT</button>
-        <button id="btn-back" onclick="closeInspect()">PUT BACK</button>
-      </div>
-      <div id="rotate-hint">DRAG TO ROTATE · PINCH TO ZOOM</div>
-    </div>
-  </div>
-</div>
-
+<div id="title">DRAG TO ROTATE</div>
+<div id="info">Loading...</div>
 <script type="importmap">
 {
   "imports": {
-    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    "three": "https://unpkg.com/three@0.183.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.183.0/examples/jsm/"
   }
 }
 </script>
 <script type="module">
 import * as THREE from 'three';
-import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
-// ═══════════════════════════════════════════════
-// TMDB
-// ═══════════════════════════════════════════════
-const TMDB_KEY  = '03549aee0d249c4c994eaf6f2f579cf2';
-const TMDB_BASE = 'https://api.themoviedb.org/3';
-const IMG_W342  = 'https://image.tmdb.org/t/p/w342';
-const IMG_W500  = 'https://image.tmdb.org/t/p/w500';
-
-const GENRES = [
-  {label:'NEW RELEASES', color:0xcc2200, lt:'now_playing', gid:null},
-  {label:'ACTION',       color:0xcc4400, lt:'genre',       gid:28},
-  {label:'COMEDY',       color:0x0077bb, lt:'genre',       gid:35},
-  {label:'HORROR',       color:0x660099, lt:'genre',       gid:27},
-  {label:'DRAMA',        color:0x006633, lt:'genre',       gid:18},
-  {label:'SCI-FI',       color:0x990066, lt:'genre',       gid:878},
-  {label:'THRILLER',     color:0x884400, lt:'genre',       gid:53},
-  {label:'ANIMATION',    color:0x006688, lt:'genre',       gid:16},
-];
-
-const POOL = GENRES.map(()=>[]);
-
-async function fetchGenre(g, idx) {
-  const u = p => g.lt==='genre'
-    ? `${TMDB_BASE}/discover/movie?api_key=${TMDB_KEY}&with_genres=${g.gid}&sort_by=popularity.desc&page=${p}`
-    : g.lt==='now_playing'
-    ? `${TMDB_BASE}/movie/now_playing?api_key=${TMDB_KEY}&page=${p}`
-    : `${TMDB_BASE}/movie/popular?api_key=${TMDB_KEY}&page=${p}`;
-  const [r1,r2] = await Promise.all([fetch(u(1)),fetch(u(2))]);
-  if(!r1.ok) throw new Error(r1.status);
-  const [d1,d2] = await Promise.all([r1.json(),r2.json()]);
-  const seen = new Set();
-  POOL[idx] = [...(d1.results||[]),...(d2.results||[])].filter(m=>{
-    if(seen.has(m.id))return false; seen.add(m.id); return true;
-  }).map(m=>({
-    id: m.id,
-    title: m.title||'Unknown',
-    year: (m.release_date||'').slice(0,4)||'—',
-    genre: g.label,
-    genreColor: `#${g.color.toString(16).padStart(6,'0')}`,
-    rating: m.vote_average ? m.vote_average.toFixed(1) : '—',
-    desc: m.overview ? (m.overview.slice(0,200)+(m.overview.length>200?'…':'')) : ' ',
-    posterSm: m.poster_path ? (IMG_W342+m.poster_path) : null,
-    posterLg: m.poster_path ? (IMG_W500+m.poster_path) : null,
-    hue: (m.id*53)%360,
-    genreIdx: idx,
-  }));
-}
-
-// ═══════════════════════════════════════════════
-// THREE.JS SETUP — MAIN SCENE (shelf walk)
-// ═══════════════════════════════════════════════
-const W = window.innerWidth, H = window.innerHeight;
-
-const renderer = new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(W, H);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// ── Renderer ──────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({antialias:true, alpha:false});
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
-document.getElementById('shelf-view').appendChild(renderer.domElement);
+renderer.toneMappingExposure = 1.2;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
 
+// ── Scene ─────────────────────────────────────────────────────
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0a0a0a);
-scene.fog = new THREE.Fog(0x0a0a0a, 12, 28);
+scene.background = new THREE.Color(0x0d0d0d);
 
-const camera = new THREE.PerspectiveCamera(70, W/H, 0.01, 50);
-camera.position.set(0, 1.65, 4); // eye height 1.65m, near south entrance
+// ── Camera ────────────────────────────────────────────────────
+const camera = new THREE.PerspectiveCamera(38, window.innerWidth/window.innerHeight, 0.001, 100);
+camera.position.set(0, 0, 0.55);
 
-// ── Lighting ──
-const ambient = new THREE.AmbientLight(0xfff5e0, 1.8); // much brighter ambient
-scene.add(ambient);
+// ── Environment map for reflections ──────────────────────────
+// Use a simple procedural env map since we can't load HDRI from unpkg easily
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+pmremGenerator.compileEquirectangularShader();
 
-// Main overhead fluorescent lights — lower Y to be closer to shelf level
-function addLight(x, y, z) {
-  const light = new THREE.PointLight(0xfff8e8, 2.5, 10);
-  light.position.set(x, y, z);
-  scene.add(light);
-  const fix = new THREE.Mesh(
-    new THREE.BoxGeometry(0.6, 0.04, 0.12),
-    new THREE.MeshStandardMaterial({color:0xffffff, emissive:0xfff8e8, emissiveIntensity:1})
-  );
-  fix.position.set(x, y+0.02, z);
-  scene.add(fix);
-}
-// Lights along both sides of store at shelf height
-for(let z=2;z>=-30;z-=3){
-  addLight(-4, 2.8, z);
-  addLight( 4, 2.8, z);
-}
+// Build a simple studio env map
+const envScene = new THREE.Scene();
+// Bright top light
+const envTop = new THREE.DirectionalLight(0xffffff, 3);
+envTop.position.set(0,1,0); envScene.add(envTop);
+const envFill = new THREE.HemisphereLight(0x8888ff, 0x442200, 1.5);
+envScene.add(envFill);
 
-// ── Store geometry ──
-// Floor — dark Blockbuster blue carpet
-const floorMat = new THREE.MeshStandardMaterial({color:0x1a3a70,roughness:0.95,metalness:0});
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(20,40), floorMat);
-floor.rotation.x = -Math.PI/2;
-floor.position.set(0,0,-14);
-floor.receiveShadow = true;
-scene.add(floor);
+// ── Lighting ──────────────────────────────────────────────────
+// Key light — warm, from upper left
+const keyLight = new THREE.DirectionalLight(0xfff5e8, 3.5);
+keyLight.position.set(-1.5, 2.5, 2);
+keyLight.castShadow = true;
+scene.add(keyLight);
 
-// Ceiling — off white
-const ceilMat = new THREE.MeshStandardMaterial({color:0xe8e0d0,roughness:1});
-const ceil = new THREE.Mesh(new THREE.PlaneGeometry(20,40), ceilMat);
-ceil.rotation.x = Math.PI/2;
-ceil.position.set(0,3.4,-14);
-scene.add(ceil);
+// Fill light — cool, from right
+const fillLight = new THREE.DirectionalLight(0xe8f0ff, 1.0);
+fillLight.position.set(2, 0.5, 1);
+scene.add(fillLight);
 
-// Walls
-const wallMat = new THREE.MeshStandardMaterial({color:0xd4a800,roughness:0.9}); // Blockbuster yellow
-function addWall(w,h,x,y,z,ry){
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,0.15), wallMat);
-  m.position.set(x,y,z); m.rotation.y=ry; m.receiveShadow=true; scene.add(m);
-}
-addWall(20,3.4,  0,1.7, -34, 0);       // back wall
-addWall(40,3.4,-10,1.7, -14, Math.PI/2); // west wall
-addWall(40,3.4, 10,1.7, -14, Math.PI/2); // east wall
+// Rim light — from behind, white
+const rimLight = new THREE.DirectionalLight(0xffffff, 1.8);
+rimLight.position.set(0.3, 1, -2);
+scene.add(rimLight);
 
-// ── VHS Box dimensions (in metres) ──
-const VHS_H  = 0.19;
-const VHS_W  = 0.104;
-const VHS_D  = 0.028;
+// Ambient
+scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 
-const texLoader = new THREE.TextureLoader();
+// ── VHS Box geometry ─────────────────────────────────────────
+// Real VHS dimensions: 188mm tall × 104mm wide × 28mm deep
+// Scale: 1 unit = 1 metre
+const W = 0.104;  // width  (X) — this is what you see face-on
+const H = 0.188;  // height (Y)
+const D = 0.028;  // depth  (Z) — the spine when spine-out on shelf
 
-// ── Shared geometry & plain plastic materials ──────────────
-// Created ONCE, reused by every box in the store
-const VHS_GEO    = new THREE.BoxGeometry(VHS_D, VHS_H, VHS_W);
-const MAT_PLASTIC = new THREE.MeshStandardMaterial({color:0xe0d8cc, roughness:0.25, metalness:0.0});
-const MAT_TOP     = new THREE.MeshStandardMaterial({color:0xd8d0c4, roughness:0.2,  metalness:0.02});
-const MAT_BOTTOM  = new THREE.MeshStandardMaterial({color:0xb8b0a4, roughness:0.4,  metalness:0.0});
+// We display the box face-on (poster facing camera)
+// so the wide face (W×H) faces the camera
 
-// ── Spine canvas — one per box, cached by movie id ─────────
-const spineCache = new Map();
-function makeSpineTex(movie) {
-  if(spineCache.has(movie.id)) return spineCache.get(movie.id);
-  const c=document.createElement('canvas'); c.width=64; c.height=512;
-  const x=c.getContext('2d');
-  // Off-white plastic
-  x.fillStyle='#e8e2d8'; x.fillRect(0,0,64,512);
-  // Dark label, edge to edge with 2px border
-  x.fillStyle='#0a0a14'; x.fillRect(2,2,60,508);
-  // Gradient sheen
-  const g=x.createLinearGradient(0,0,64,0);
-  g.addColorStop(0,'rgba(255,255,255,0.1)'); g.addColorStop(1,'rgba(0,0,0,0.15)');
-  x.fillStyle=g; x.fillRect(2,2,60,508);
-  // Title rotated vertical — white, tight
-  x.save();
-  x.translate(32,256); x.rotate(-Math.PI/2);
-  x.fillStyle='#ffffff';
-  x.font='bold 13px Arial Narrow,Arial';
-  x.textAlign='center'; x.textBaseline='middle';
-  x.fillText(movie.title.toUpperCase().slice(0,22), 0, 0);
-  x.restore();
-  // Year at bottom
-  x.save();
-  x.translate(32,475); x.rotate(-Math.PI/2);
-  x.fillStyle='rgba(255,255,255,0.35)';
-  x.font='9px Arial'; x.textAlign='center'; x.textBaseline='middle';
-  x.fillText(movie.year||'', 0, 0);
-  x.restore();
-  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace;
-  spineCache.set(movie.id, t);
-  return t;
-}
+// ── Textures ──────────────────────────────────────────────────
+const loader = new THREE.TextureLoader();
 
-// ── Poster texture cache — loaded lazily by distance ───────
-const posterCache = new Map(); // movieId → {tex, loaded, loading}
+// TMDB movie — using a real poster
+const TMDB_KEY = '03549aee0d249c4c994eaf6f2f579cf2';
 
-function getPosterMat(movie) {
-  if(!posterCache.has(movie.id)){
-    // Placeholder material — genre color
-    const mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(`hsl(${movie.hue},40%,20%)`),
-      roughness:0.15, metalness:0.0
-    });
-    posterCache.set(movie.id, {mat, loaded:false, loading:false});
-  }
-  return posterCache.get(movie.id).mat;
-}
+let movie = {
+  title: 'INCEPTION',
+  year: '2010',
+  rating: '8.4',
+  genre: 'SCI-FI',
+  desc: 'A thief who steals corporate secrets through the use of dream-sharing technology is given the inverse task of planting an idea into the mind of a C.E.O.',
+  posterUrl: null,
+};
 
-function loadPosterIfNeeded(movie) {
-  if(!movie.posterSm) return;
-  const entry = posterCache.get(movie.id);
-  if(!entry || entry.loaded || entry.loading) return;
-  entry.loading = true;
-  texLoader.load(movie.posterSm, tex=>{
-    tex.colorSpace = THREE.SRGBColorSpace;
-    entry.mat.map = tex;
-    entry.mat.color.set(0xffffff);
-    entry.mat.roughness = 0.12;
-    entry.mat.needsUpdate = true;
-    entry.loaded = true;
-  });
-}
+// Fetch movie data + credits + images
+const MOVIE_ID = 27205; // Inception
+fetch(`https://api.themoviedb.org/3/movie/${MOVIE_ID}?api_key=${TMDB_KEY}&append_to_response=credits,images`)
+  .then(r=>r.json())
+  .then(async d=>{
+    movie.title    = d.title || movie.title;
+    movie.year     = (d.release_date||'').slice(0,4) || movie.year;
+    movie.rating   = d.vote_average?.toFixed(1) || movie.rating;
+    movie.runtime  = d.runtime ? `${d.runtime} MIN` : '';
+    movie.desc     = d.overview?.slice(0,280) || movie.desc;
+    movie.genre    = d.genres?.[0]?.name?.toUpperCase() || movie.genre;
+    movie.director = d.credits?.crew?.find(c=>c.job==='Director')?.name || '';
+    movie.cast     = d.credits?.cast?.slice(0,4).map(c=>c.name).join(', ') || '';
 
-// ── createVHSBox ────────────────────────────────────────────
-// BoxGeometry face order: +x, -x, +y, -y, +z, -z
-// Orientation: +z = FRONT (poster, faces player when looking at shelf)
-//              -x = SPINE (faces player when box is spine-out on shelf)
-//              +y = TOP
-function createVHSBox(movie) {
-  const spineMat = new THREE.MeshStandardMaterial({
-    map: makeSpineTex(movie), roughness:0.2, metalness:0.0
-  });
-  const posterMat = getPosterMat(movie);
+    document.getElementById('title').textContent = movie.title;
 
-  const mesh = new THREE.Mesh(VHS_GEO, [
-    MAT_PLASTIC,  // +x right edge
-    spineMat,     // -x SPINE ← faces player when box is spine-out
-    MAT_TOP,      // +y top
-    MAT_BOTTOM,   // -y bottom
-    posterMat,    // +z FRONT poster
-    MAT_PLASTIC,  // -z back
-  ]);
-  mesh.castShadow    = false;
-  mesh.receiveShadow = false;
-  mesh.userData.movie = movie;
-  const group = new THREE.Group();
-  group.add(mesh);
-  return group;
-}
-
-// ── createInspectBox ────────────────────────────────────────
-// Full quality box for the pickup view — loads large poster
-function createInspectBox(movie) {
-  const spineMat = new THREE.MeshStandardMaterial({
-    map: makeSpineTex(movie), roughness:0.18, metalness:0.0
-  });
-  const posterMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(`hsl(${movie.hue},40%,20%)`),
-    roughness:0.12, metalness:0.0
-  });
-  if(movie.posterSm){
-    texLoader.load(movie.posterSm, tex=>{
-      tex.colorSpace=THREE.SRGBColorSpace;
-      posterMat.map=tex; posterMat.color.set(0xffffff);
-      posterMat.needsUpdate=true;
-    });
-  }
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(VHS_D,VHS_H,VHS_W), [
-    new THREE.MeshStandardMaterial({color:0xe0d8cc, roughness:0.25}),
-    spineMat,
-    new THREE.MeshStandardMaterial({color:0xd8d0c4, roughness:0.2, metalness:0.02}),
-    new THREE.MeshStandardMaterial({color:0xb8b0a4, roughness:0.4}),
-    posterMat,
-    new THREE.MeshStandardMaterial({color:0x0a0a14, roughness:0.3}),
-  ]);
-  mesh.userData.movie = movie;
-  const group = new THREE.Group();
-  group.add(mesh);
-  return group;
-}
-
-// ── Lazy poster loading — called each frame for nearby boxes ─
-const POSTER_LOAD_DIST = 4.0; // load posters within this distance
-function updateNearbyPosters() {
-  const pos = camera.position;
-  for(const box of allBoxes){
-    const wp = new THREE.Vector3();
-    box.getWorldPosition(wp);
-    const dist = pos.distanceTo(wp);
-    if(dist < POSTER_LOAD_DIST){
-      loadPosterIfNeeded(box.children[0]?.userData.movie);
+    // Load poster
+    if(d.poster_path){
+      movie.posterUrl = `https://image.tmdb.org/t/p/w500${d.poster_path}`;
+      updatePosterMaterial(movie.posterUrl);
     }
-  }
-}
 
-// ═══════════════════════════════════════════════
-// SHELF SYSTEM
-// ═══════════════════════════════════════════════
-// Store layout:
-// - Player enters from south (z=+4), walks north (negative z)
-// - Perimeter shelves on west and east walls
-// - 3 freestanding aisle shelf units
-// - Each shelf unit: 6 rows of boxes, 20 boxes per row
+    // Load up to 3 backdrop images for back cover
+    const backdrops = (d.images?.backdrops||[]).slice(0,3);
+    const backdropImgs = await Promise.all(backdrops.map(b=>
+      new Promise(res=>{
+        const img=new Image(); img.crossOrigin='anonymous';
+        img.onload=()=>res(img);
+        img.onerror=()=>res(null);
+        img.src=`https://image.tmdb.org/t/p/w300${b.file_path}`;
+      })
+    ));
+    const loadedImgs = backdropImgs.filter(Boolean);
 
-const ROWS_PER_UNIT = 8;  // 8 rows × 0.20m = 1.6m tall shelf, eye level at row 4
-const BOXES_PER_ROW = 20;
-const ROW_SPACING   = VHS_H + 0.01;      // vertical gap between rows
-const BOX_SPACING   = VHS_D + 0.005;     // boxes packed spine-out along Z-ish axis
-// Wait — in a real shelf, boxes are SPINE-OUT facing the aisle
-// Box depth (VHS_D=0.028m) is what stacks along the wall
-// Box width (VHS_W=0.104m) is the height of each "slot" in the row... no
-// Actually spine-out means:
-//   - The spine face is what you see when looking down the aisle
-//   - The box sits with its DEPTH going into the shelf
-//   - Boxes are arranged side by side along the shelf LENGTH
-//   - The "width" of shelf space each box takes = VHS_W (0.104m)
-// So along shelf axis: VHS_W + gap per box
-// Each box takes VHS_D width along shelf (spine faces out, case goes back into shelf)
-// Plus tiny gap between spines
-const BOX_ALONG_SHELF = VHS_D + 0.003;
+    // Build back and spine with real data
+    backMat.map = makeBackCanvas(loadedImgs);
+    backMat.needsUpdate = true;
+    spineMat.map = makeSpineCanvas();
+    spineMat.needsUpdate = true;
+  })
+  .catch(e=>console.warn('TMDB fetch failed',e));
 
-// Shelf plank material
-const shelfMat = new THREE.MeshStandardMaterial({color:0x3a2208, roughness:0.8, metalness:0.05});
-const shelfBackMat = new THREE.MeshStandardMaterial({color:0x241405, roughness:0.9});
+// ── Canvas textures ───────────────────────────────────────────
 
-// Track how many movies from each genre pool have been used across all shelf units
-// so no movie ever appears twice in the entire store
-const genrePoolOffset = new Array(GENRES.length).fill(0);
-
-// All interactive VHS boxes
-const allBoxes = [];
-
-const colliders = [];
-
-function isBlocked(x, z) {
-  // Outer store walls
-  if(x < -9.2 || x > 9.2 || z < -33 || z > 4.8) return true;
-  // Shelf colliders
-  for(const c of colliders){
-    if(x > c.minX && x < c.maxX && z > c.minZ && z < c.maxZ) return true;
-  }
-  return false;
-}
-
-function tryMove(dx, dz) {
-  const nx = camera.position.x + dx;
-  const nz = camera.position.z + dz;
-  if(!isBlocked(nx, camera.position.z)) camera.position.x = nx;
-  if(!isBlocked(camera.position.x, nz)) camera.position.z = nz;
-}
-
-// Pre-built sign textures — one per genre, built once
-const signTextures = GENRES.map((g, gi) => {
-  const c = document.createElement('canvas'); c.width=256; c.height=48;
+function makeSpineCanvas() {
+  const c = document.createElement('canvas'); c.width=64; c.height=512;
   const x = c.getContext('2d');
-  x.fillStyle = `#${g.color.toString(16).padStart(6,'0')}`;
-  x.fillRect(0,0,256,48);
-  x.fillStyle = 'rgba(0,0,0,0.85)';
-  x.font = 'bold 22px Arial Black,Arial';
+
+  // Full white plastic case
+  x.fillStyle = '#e8e2d8'; x.fillRect(0,0,64,512);
+
+  // Thin label — goes almost edge to edge, just 2px border
+  x.fillStyle = '#0a0a14'; x.fillRect(2, 2, 60, 508);
+
+  // Very subtle gradient on label
+  const g = x.createLinearGradient(0,0,64,0);
+  g.addColorStop(0,'rgba(255,255,255,0.08)');
+  g.addColorStop(0.5,'rgba(255,255,255,0.01)');
+  g.addColorStop(1,'rgba(0,0,0,0.12)');
+  x.fillStyle=g; x.fillRect(2,2,60,508);
+
+  // Title — rotated, white text, tight to label
+  x.save();
+  x.translate(32, 256);
+  x.rotate(-Math.PI/2);
+  x.fillStyle = '#ffffff';
+  x.font = 'bold 15px Arial Narrow, Arial';
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.letterSpacing = '2px';
+  x.fillText(movie.title.toUpperCase(), 0, 0);
+  x.restore();
+
+  // Small studio placeholder at bottom
+  x.save();
+  x.translate(32, 478);
+  x.rotate(-Math.PI/2);
+  x.fillStyle='rgba(255,255,255,0.3)';
+  x.font='8px Arial';
   x.textAlign='center'; x.textBaseline='middle';
-  x.fillText(g.label, 128, 24);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-});
-const signMats = signTextures.map(t =>
-  new THREE.MeshLambertMaterial({map: t})
-);
+  x.fillText(movie.year, 0, 0);
+  x.restore();
 
-// Shared shelf plank geometry (reused across all shelves)
-const PLANK_GEO = new THREE.BoxGeometry(1, 0.018, 0.17); // scaled per shelf
-const BACK_GEO  = new THREE.BoxGeometry(1, 1, 0.04);     // scaled per shelf
-const SIDE_GEO  = new THREE.BoxGeometry(0.025, 1, 0.17); // scaled per shelf
-const SIGN_GEO  = new THREE.BoxGeometry(1, 0.25, 0.04);  // scaled per shelf
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t;
+}
 
-function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
-  const group = new THREE.Group();
-  // Raise shelf so middle rows are at eye height (1.65m)
-  // Shelf height = ROWS_PER_UNIT * ROW_SPACING = 8 * 0.20 = 1.6m
-  // To center: base at 1.65 - 0.8 = 0.85m
-  group.position.set(posX, 0.85, posZ);
-  group.rotation.y = rotY;
-  scene.add(group);
+// Back cover — built async once backdrop images load
+function makeBackCanvas(backdrops=[]) {
+  const cw=512, ch=768;
+  const c=document.createElement('canvas'); c.width=cw; c.height=ch;
+  const x=c.getContext('2d');
 
-  const pool = POOL[genreIdx];
-  if(!pool||!pool.length) return;
+  // Background — dark navy, like real VHS back
+  x.fillStyle='#080810'; x.fillRect(0,0,cw,ch);
 
-  const shelfDepth = VHS_W + 0.05;
-  const shelfH     = ROWS_PER_UNIT * ROW_SPACING + 0.1;
+  let yOffset = 0;
 
-  // Back panel
-  const back = new THREE.Mesh(BACK_GEO, shelfBackMat);
-  back.scale.set(length, shelfH, 1);
-  back.position.set(0, shelfH/2, -shelfDepth/2);
-  group.add(back);
-
-  // Shelf planks — one per row
-  for(let r=0; r<=ROWS_PER_UNIT; r++){
-    const plank = new THREE.Mesh(PLANK_GEO, shelfMat);
-    plank.scale.set(length+0.04, 1, shelfDepth/0.17);
-    plank.position.set(0, r*ROW_SPACING, -shelfDepth/2);
-    group.add(plank);
-  }
-
-  // Side panels
-  for(const sx of [-length/2-0.01, length/2+0.01]){
-    const side = new THREE.Mesh(SIDE_GEO, shelfMat);
-    side.scale.set(1, shelfH/0.17, shelfDepth/0.17);
-    side.position.set(sx, shelfH/2, -shelfDepth/2);
-    group.add(side);
-  }
-
-  // Sign — uses pre-built material, no new canvas
-  const sign = new THREE.Mesh(SIGN_GEO, signMats[genreIdx]);
-  sign.scale.set(Math.min(length, 2.5), 1, 1);
-  sign.position.set(0, shelfH + 0.18, -0.02);
-  group.add(sign);
-
-  // Collision
-  const hw = length/2 + 0.1, hd = shelfDepth + 0.1;
-  const cos = Math.cos(rotY), sin = Math.sin(rotY);
-  const corners = [[-hw,-hd],[-hw,0],[hw,-hd],[hw,0]].map(([lx,lz])=>({
-    wx: posX + lx*cos - lz*sin,
-    wz: posZ + lx*sin + lz*cos,
-  }));
-  colliders.push({
-    minX: Math.min(...corners.map(c=>c.wx)) - 0.05,
-    maxX: Math.max(...corners.map(c=>c.wx)) + 0.05,
-    minZ: Math.min(...corners.map(c=>c.wz)) - 0.05,
-    maxZ: Math.max(...corners.map(c=>c.wz)) + 0.05,
-  });
-
-  // Place boxes — fill every row, cycling through pool if needed
-  const boxCount = Math.min(Math.floor(length / BOX_ALONG_SHELF), BOXES_PER_ROW);
-  const startX   = -(boxCount * BOX_ALONG_SHELF)/2 + BOX_ALONG_SHELF/2;
-  const startOffset = genrePoolOffset[genreIdx];
-  let placed = 0;
-
-  for(let row=0; row<ROWS_PER_UNIT; row++){
-    for(let col=0; col<boxCount; col++){
-      // Use modulo so every row is filled even if pool is smaller than total slots
-      const idx = startOffset + ((row * boxCount + col) % pool.length);
-      const movie = pool[idx];
-      if(!movie) continue;
-      placed++;
-      const box = createVHSBox(movie);
-      // Rotate so spine (-x face) faces the aisle (toward player)
-      // The shelf group's rotY handles which direction the shelf faces,
-      // so we rotate the box 90° around Y so -x → +z (toward player)
-      box.rotation.y = -Math.PI / 2;
-      box.position.set(
-        startX + col*BOX_ALONG_SHELF,
-        row*ROW_SPACING + VHS_H/2 + 0.018,
-        -VHS_W/2
-      );
-      box.userData.shelfPos   = box.position.clone();
-      box.userData.shelfGroup = group;
-      group.add(box);
-      allBoxes.push(box);
+  // ── Screenshot images grid ──────────────────────────────
+  // Arrange up to 3 backdrop images across the top 40% of back
+  const imgH = Math.round(ch * 0.38);
+  if(backdrops.length >= 3){
+    // 3 images side by side
+    const iw = Math.floor(cw/3)-2;
+    for(let i=0;i<3;i++){
+      try{ x.drawImage(backdrops[i], i*(iw+2), 0, iw, imgH); }catch(_){}
     }
-  }
-  // Only advance offset by one full row worth so genres stay somewhat distinct
-  genrePoolOffset[genreIdx] = (startOffset + boxCount) % pool.length;
-}
-
-const isMobile = 'ontouchstart' in window;
-
-// ── Place all shelf units ──
-async function buildStore() {
-  const st = document.getElementById('ld-st');
-  const wallLen  = isMobile ? 4 : 7;
-  const aisleLen = isMobile ? 3 : 6;
-
-  const units = [
-    [ 8.5, -2,  Math.PI, 0, 'NEW RELEASES', wallLen],
-    [ 8.5, -9,  Math.PI, 1, 'ACTION',       wallLen],
-    [ 8.5,-16,  Math.PI, 2, 'COMEDY',       wallLen],
-    [ 8.5,-23,  Math.PI, 3, 'HORROR',       wallLen],
-    [-8.5, -2,  0,       4, 'DRAMA',        wallLen],
-    [-8.5, -9,  0,       5, 'SCI-FI',       wallLen],
-    [-8.5,-16,  0,       6, 'THRILLER',     wallLen],
-    [-8.5,-23,  0,       7, 'ANIMATION',    wallLen],
-    [ 0,-10,  0,         0, 'NEW RELEASES', aisleLen],
-    [ 0,-10,  Math.PI,   1, 'ACTION',       aisleLen],
-    [ 0,-18,  0,         2, 'COMEDY',       aisleLen],
-    [ 0,-18,  Math.PI,   3, 'HORROR',       aisleLen],
-    [ 0,-26,  0,         4, 'DRAMA',        aisleLen],
-    [ 0,-26,  Math.PI,   5, 'SCI-FI',       aisleLen],
-    [ 0,-33, -Math.PI/2, 6, 'THRILLER',     isMobile ? 6 : 14],
-  ];
-
-  for(let i=0; i<units.length; i++){
-    const u = units[i];
-    st.textContent = `Placing ${u[4]}... (${i+1}/${units.length})`;
-    try {
-      createShelfUnit(u[0], u[1], u[2], u[3], u[4], u[5]);
-    } catch(e) {
-      st.textContent = `ERROR on shelf ${i+1}: ${e.message}`;
-      console.error(e);
-      await new Promise(r=>setTimeout(r,5000));
-      return;
+    // Thin separator line
+    x.fillStyle='rgba(255,255,255,0.15)'; x.fillRect(0,imgH,cw,1);
+    yOffset = imgH + 8;
+  } else if(backdrops.length === 2){
+    const iw = Math.floor(cw/2)-1;
+    for(let i=0;i<2;i++){
+      try{ x.drawImage(backdrops[i], i*(iw+1), 0, iw, imgH); }catch(_){}
     }
-    await new Promise(r=>setTimeout(r,10));
-  }
-}
-
-// ═══════════════════════════════════════════════
-// PLAYER CONTROLS
-// ═══════════════════════════════════════════════
-const controls = new PointerLockControls(camera, renderer.domElement);
-scene.add(controls.getObject());
-
-
-// Update HUD for mobile
-if(isMobile){
-  document.getElementById('controls').innerHTML = `
-    <div class="ck"><b>Left</b> Move</div>
-    <div class="ck"><b>Right</b> Look</div>
-    <div class="ck"><b>Tap box</b> Pick Up</div>
-  `;
-  // Add joystick elements
-  const joyHTML = `
-    <div id="jz" style="position:fixed;left:0;bottom:0;width:50%;height:44%;pointer-events:all;z-index:15;">
-      <div id="jp" style="position:absolute;bottom:30px;left:50%;transform:translateX(-50%);width:80px;height:80px;border-radius:50%;border:2px solid rgba(255,215,0,0.4);background:rgba(255,215,0,0.08);">
-        <div id="jd" style="position:absolute;width:28px;height:28px;border-radius:50%;background:rgba(255,215,0,0.6);top:50%;left:50%;transform:translate(-50%,-50%);"></div>
-      </div>
-    </div>
-    <div id="lz" style="position:fixed;right:0;bottom:0;width:50%;height:44%;pointer-events:all;z-index:15;"></div>
-  `;
-  document.getElementById('hud').insertAdjacentHTML('beforeend', joyHTML);
-}
-
-// ── Mobile joystick state ──
-let joyOn=false, joyX=0, joyY=0;
-let lookOn=false, lookLastX=0, lookLastY=0;
-
-if(isMobile){
-  const jZ = document.getElementById('jz');
-  const jD = document.getElementById('jd');
-  jZ.addEventListener('touchstart',e=>{joyOn=true;e.preventDefault();},{passive:false});
-  jZ.addEventListener('touchend',()=>{joyOn=false;joyX=0;joyY=0;jD.style.transform='translate(-50%,-50%)';});
-  jZ.addEventListener('touchmove',e=>{
-    if(!joyOn)return;e.preventDefault();
-    const t=e.touches[0],r=jZ.getBoundingClientRect();
-    let dx=t.clientX-(r.left+r.width/2),dy=t.clientY-(r.top+r.height*0.65);
-    const d=Math.sqrt(dx*dx+dy*dy),mx=34;
-    if(d>mx){dx=dx/d*mx;dy=dy/d*mx;}
-    joyX=dx/mx;joyY=dy/mx;
-    jD.style.transform=`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`;
-  },{passive:false});
-
-  const lZ = document.getElementById('lz');
-  lZ.addEventListener('touchstart',e=>{
-    if(inspectOpen)return;
-    lookOn=true;lookLastX=e.touches[0].clientX;lookLastY=e.touches[0].clientY;
-    e.preventDefault();
-  },{passive:false});
-  lZ.addEventListener('touchend',()=>lookOn=false);
-  lZ.addEventListener('touchmove',e=>{
-    if(!lookOn||inspectOpen)return;e.preventDefault();
-    const dx=e.touches[0].clientX-lookLastX;
-    const dy=e.touches[0].clientY-lookLastY;
-    camera.rotation.order='YXZ';
-    camera.rotation.y -= dx*0.004;
-    camera.rotation.x -= dy*0.003;
-    camera.rotation.x=Math.max(-Math.PI/3,Math.min(Math.PI/3,camera.rotation.x));
-    lookLastX=e.touches[0].clientX;lookLastY=e.touches[0].clientY;
-  },{passive:false});
-
-  // Tap on a box to pick it up (tap right side near center)
-  lZ.addEventListener('touchend',e=>{
-    if(inspectOpen)return;
-    // Raycast from screen center on tap
-    checkHover();
-    if(hoveredBox) openInspect(hoveredBox);
-  },{passive:false});
-}
-
-renderer.domElement.addEventListener('click', ()=>{
-  if(inspectOpen) return;
-  if(!isMobile) controls.lock();
-});
-
-const keys = {};
-document.addEventListener('keydown', e=>{
-  keys[e.key.toLowerCase()]=true;
-  if(e.key==='Escape'&&inspectOpen) closeInspect();
-});
-document.addEventListener('keyup', e=>keys[e.key.toLowerCase()]=false);
-
-const SPEED = 0.055;
-const moveDir = new THREE.Vector3();
-
-function updateMovement() {
-  if(isMobile){
-    if(joyOn && (Math.abs(joyX)>0.05 || Math.abs(joyY)>0.05)){
-      const forward = new THREE.Vector3(-Math.sin(camera.rotation.y), 0, -Math.cos(camera.rotation.y));
-      const right   = new THREE.Vector3( Math.cos(camera.rotation.y), 0, -Math.sin(camera.rotation.y));
-      tryMove(
-        (forward.x * (-joyY) + right.x * joyX) * SPEED * 1.2,
-        (forward.z * (-joyY) + right.z * joyX) * SPEED * 1.2
-      );
-    }
-    camera.position.y = 1.65;
-    return;
-  }
-  if(!controls.isLocked) return;
-  moveDir.set(0,0,0);
-  if(keys['w']||keys['arrowup'])    moveDir.z -= 1;
-  if(keys['s']||keys['arrowdown'])  moveDir.z += 1;
-  if(keys['a']||keys['arrowleft'])  moveDir.x -= 1;
-  if(keys['d']||keys['arrowright']) moveDir.x += 1;
-  if(moveDir.length()>0){
-    moveDir.normalize().multiplyScalar(SPEED);
-    const fwd = new THREE.Vector3(-Math.sin(camera.rotation.y), 0, -Math.cos(camera.rotation.y));
-    const rgt = new THREE.Vector3( Math.cos(camera.rotation.y), 0, -Math.sin(camera.rotation.y));
-    tryMove(
-      (fwd.x * (-moveDir.z) + rgt.x * moveDir.x),
-      (fwd.z * (-moveDir.z) + rgt.z * moveDir.x)
-    );
-  }
-  const p = controls.getObject().position;
-  p.x = camera.position.x;
-  p.z = camera.position.z;
-  p.y = 1.65;
-}
-
-// ═══════════════════════════════════════════════
-// RAYCASTING — BOX HOVER & CLICK
-// ═══════════════════════════════════════════════
-const raycaster = new THREE.Raycaster();
-const center = new THREE.Vector2(0,0);
-let hoveredBox = null;
-let inspectOpen = false;
-let currentMovie = null;
-
-function checkHover() {
-  raycaster.setFromCamera(center, camera);
-  // Only cast against VHS meshes
-  const meshes = allBoxes.map(b=>b.children[0]).filter(Boolean);
-  const hits = raycaster.intersectObjects(meshes);
-  if(hits.length>0 && hits[0].distance<2.2){
-    const box = hits[0].object.parent;
-    if(box!==hoveredBox){
-      hoveredBox=box;
-      document.getElementById('hint').classList.add('show');
-    }
+    x.fillStyle='rgba(255,255,255,0.15)'; x.fillRect(0,imgH,cw,1);
+    yOffset = imgH + 8;
+  } else if(backdrops.length === 1){
+    try{ x.drawImage(backdrops[0], 0, 0, cw, imgH); }catch(_){}
+    x.fillStyle='rgba(255,255,255,0.15)'; x.fillRect(0,imgH,cw,1);
+    yOffset = imgH + 8;
   } else {
-    hoveredBox=null;
-    document.getElementById('hint').classList.remove('show');
+    // No images — colored header band instead
+    x.fillStyle='#1a1a3a'; x.fillRect(0,0,cw,60);
+    yOffset = 68;
   }
+
+  // ── Title ────────────────────────────────────────────────
+  x.fillStyle='#ffffff';
+  x.font='bold 28px Arial Black, Arial';
+  x.textAlign='left'; x.textBaseline='top';
+  x.fillText(movie.title.toUpperCase(), 16, yOffset);
+  yOffset += 36;
+
+  // Year · Rating · Runtime row
+  x.fillStyle='rgba(255,255,255,0.55)';
+  x.font='12px Arial';
+  x.fillText(`${movie.year}  ·  ★ ${movie.rating}  ·  ${movie.runtime||''}`, 16, yOffset);
+  yOffset += 22;
+
+  // Thin rule
+  x.fillStyle='rgba(255,255,255,0.15)'; x.fillRect(16,yOffset,cw-32,1);
+  yOffset += 10;
+
+  // ── Synopsis ─────────────────────────────────────────────
+  x.fillStyle='rgba(255,255,255,0.82)';
+  x.font='13px Arial';
+  const words = movie.desc.split(' ');
+  let line='', lineH=19;
+  for(const w of words){
+    const test=line+w+' ';
+    if(x.measureText(test).width > cw-32 && line!==''){
+      x.fillText(line.trim(), 16, yOffset);
+      line=w+' '; yOffset+=lineH;
+      if(yOffset > ch-140) break;
+    } else { line=test; }
+  }
+  if(line.trim() && yOffset <= ch-140){ x.fillText(line.trim(),16,yOffset); yOffset+=lineH; }
+  yOffset += 10;
+
+  // ── Cast line ────────────────────────────────────────────
+  if(movie.cast){
+    x.fillStyle='rgba(255,255,255,0.4)';
+    x.font='11px Arial';
+    x.fillText(`CAST: ${movie.cast}`, 16, yOffset);
+    yOffset += 18;
+  }
+
+  // ── Director line ────────────────────────────────────────
+  if(movie.director){
+    x.fillStyle='rgba(255,255,255,0.4)';
+    x.font='11px Arial';
+    x.fillText(`DIRECTED BY ${movie.director.toUpperCase()}`, 16, yOffset);
+    yOffset += 18;
+  }
+
+  // ── Bottom section ───────────────────────────────────────
+  // Rating badge
+  x.fillStyle='rgba(255,255,255,0.08)';
+  x.fillRect(0, ch-90, cw, 90);
+  x.fillStyle='rgba(255,255,255,0.15)';
+  x.fillRect(0, ch-90, cw, 1);
+
+  // Studio / disclaimer text
+  x.fillStyle='rgba(255,255,255,0.25)';
+  x.font='9px Arial';
+  x.textAlign='left';
+  x.fillText('© Warner Bros. Entertainment Inc. All Rights Reserved.', 16, ch-72);
+  x.fillText('Manufactured and distributed under license.', 16, ch-60);
+  x.fillText(`NOT FOR SALE OR RENTAL  ·  ${movie.year}`, 16, ch-48);
+
+  // Barcode
+  x.fillStyle='#ffffff'; x.fillRect(cw-120, ch-76, 104, 46);
+  x.fillStyle='#000000';
+  for(let i=0;i<36;i++){
+    const bw = Math.random()>0.6?3:Math.random()>0.4?2:1;
+    x.fillRect(cw-118+i*2.7, ch-74, bw, 38);
+  }
+  x.fillStyle='#000'; x.font='8px Arial'; x.textAlign='center';
+  x.fillText('5 01234 56789 0', cw-68, ch-36);
+
+  // Rating box
+  x.fillStyle='#ffffff'; x.fillRect(14, ch-76, 46, 46);
+  x.fillStyle='#000'; x.font='bold 13px Arial Black'; x.textAlign='center';
+  x.fillText('PG-13', 37, ch-58);
+  x.fillStyle='#555'; x.font='8px Arial';
+  x.fillText('RATED', 37, ch-46);
+
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t;
 }
 
-renderer.domElement.addEventListener('click', ()=>{
-  if(inspectOpen) return;
-  if(hoveredBox&&controls.isLocked){
-    openInspect(hoveredBox);
-  }
+function makeTopCanvas() {
+  const c=document.createElement('canvas'); c.width=256; c.height=64;
+  const x=c.getContext('2d');
+  // Off-white plastic top
+  const g=x.createLinearGradient(0,0,0,64);
+  g.addColorStop(0,'#e8e0d4');g.addColorStop(1,'#ccc5b8');
+  x.fillStyle=g; x.fillRect(0,0,256,64);
+  // Subtle reel window indentation line
+  x.strokeStyle='rgba(0,0,0,0.15)'; x.lineWidth=1;
+  x.strokeRect(30,8,196,48);
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t;
+}
+
+// ── Materials ─────────────────────────────────────────────────
+// Plastic case material — shared for side/bottom
+const plasticMat = new THREE.MeshStandardMaterial({
+  color: 0xddd5c8,
+  roughness: 0.25,
+  metalness: 0.0,
 });
 
-// ═══════════════════════════════════════════════
-// INSPECT VIEW — Three.js on the inspect canvas
-// ═══════════════════════════════════════════════
-const inspectCanvas = document.getElementById('inspect-3d');
-const iRenderer = new THREE.WebGLRenderer({canvas:inspectCanvas, antialias:true, alpha:true});
-iRenderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
-iRenderer.outputColorSpace = THREE.SRGBColorSpace;
-iRenderer.toneMapping = THREE.ACESFilmicToneMapping;
-iRenderer.toneMappingExposure = 1.2;
+// Poster face — placeholder until loaded
+const posterMat = new THREE.MeshStandardMaterial({
+  color: 0x223344,
+  roughness: 0.15,
+  metalness: 0.0,
+});
 
-const iScene = new THREE.Scene();
-const iCamera = new THREE.PerspectiveCamera(45, 1, 0.01, 10);
-iCamera.position.set(0, 0, 0.5);
+// Spine material
+const spineMat = new THREE.MeshStandardMaterial({
+  map: makeSpineCanvas(),
+  roughness: 0.2,
+  metalness: 0.0,
+});
 
-// Lights for inspect view
-iScene.add(new THREE.AmbientLight(0xffffff, 0.5));
-const keyLight = new THREE.DirectionalLight(0xfff8e8, 2.0);
-keyLight.position.set(1.5, 2, 2);
-iScene.add(keyLight);
-const fillLight = new THREE.DirectionalLight(0xe8f0ff, 0.6);
-fillLight.position.set(-2, 0, 1);
-iScene.add(fillLight);
-const rimLight = new THREE.DirectionalLight(0xffffff, 0.4);
-rimLight.position.set(0, -1, -2);
-iScene.add(rimLight);
+// Back material
+const backMat = new THREE.MeshStandardMaterial({
+  map: makeBackCanvas(),
+  roughness: 0.25,
+  metalness: 0.0,
+});
 
-let inspectBox = null; // the box mesh in inspect scene
+// Top material
+const topMat = new THREE.MeshStandardMaterial({
+  map: makeTopCanvas(),
+  roughness: 0.2,
+  metalness: 0.02,
+});
 
-function openInspect(boxGroup) {
-  const movie = boxGroup.children[0]?.userData.movie;
-  if(!movie) return;
-  currentMovie = movie;
-  inspectOpen = true;
-  controls.unlock();
+// Bottom
+const botMat = new THREE.MeshStandardMaterial({
+  color: 0xb8b0a4,
+  roughness: 0.4,
+  metalness: 0.0,
+});
 
-  // Populate info panel
-  document.getElementById('info-title').textContent = movie.title;
-  document.getElementById('info-meta').textContent = `${movie.year}  ·  ★ ${movie.rating}`;
-  document.getElementById('info-genre').textContent = movie.genre;
-  document.getElementById('info-genre').style.background = movie.genreColor||'#1565C0';
-  document.getElementById('info-rating').textContent = `★ ${movie.rating}`;
-  document.getElementById('info-desc').textContent = movie.desc;
+// BoxGeometry face order: +x, -x, +y, -y, +z, -z
+// We orient box so:
+//   +z face = FRONT (poster, faces camera)
+//   -z face = BACK
+//   +x face = RIGHT edge (thin, D wide)
+//   -x face = LEFT edge / spine (thin, D wide)  ← spine visible when on shelf
+//   +y = TOP
+//   -y = BOTTOM
+const geo = new THREE.BoxGeometry(W, H, D);
+const materials = [
+  plasticMat,   // +x right edge
+  spineMat,     // -x LEFT = SPINE (faces player when box is on shelf spine-out)
+  topMat,       // +y top
+  botMat,       // -y bottom
+  posterMat,    // +z FRONT = poster face
+  backMat,      // -z back
+];
 
-  // Clone the box mesh into the inspect scene
-  if(inspectBox){ iScene.remove(inspectBox); inspectBox=null; }
-  inspectBox = createInspectBox(movie);
-  inspectBox.position.set(0,0,0);
-  inspectBox.rotation.set(0,0,0);
+const box = new THREE.Mesh(geo, materials);
+box.castShadow = true;
+box.receiveShadow = true;
+scene.add(box);
 
-  iScene.add(inspectBox);
+// ── Subtle ground plane for shadow ───────────────────────────
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(2,2),
+  new THREE.MeshStandardMaterial({color:0x111111, roughness:1})
+);
+ground.rotation.x = -Math.PI/2;
+ground.position.y = -0.15;
+ground.receiveShadow = true;
+scene.add(ground);
 
-  // Show overlay
-  document.getElementById('inspect').classList.add('open');
-
-  // Resize inspect renderer
-  resizeInspect();
+// ── Load real poster ──────────────────────────────────────────
+function updatePosterMaterial(url) {
+  loader.load(url, tex => {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    posterMat.map = tex;
+    posterMat.color.set(0xffffff);
+    posterMat.roughness = 0.12;
+    posterMat.needsUpdate = true;
+  });
 }
 
-window.closeInspect = function() {
-  inspectOpen = false;
-  document.getElementById('inspect').classList.remove('open');
-  if(inspectBox){ iScene.remove(inspectBox); inspectBox=null; }
-  currentMovie = null;
-};
+// ── Rotation state ────────────────────────────────────────────
+let rotX = 0.15, rotY = 0.4;
+let isDragging = false;
+let lastX = 0, lastY = 0;
+let velX = 0, velY = 0;
+let autoRotate = true;
+let autoTimer = null;
 
-window.watchMovie = function() {
-  if(!currentMovie) return;
-  window.open(`https://www.google.com/search?q=watch+${encodeURIComponent(currentMovie.title)}+streaming`,'_blank');
-};
+// Initial orientation — show poster face (rotY=0 means +z faces camera = poster)
+box.rotation.set(rotX, rotY, 0);
 
-function resizeInspect() {
-  const W2=window.innerWidth, H2=window.innerHeight;
-  iRenderer.setSize(W2,H2);
-  iCamera.aspect=W2/H2;
-  iCamera.updateProjectionMatrix();
-}
-
-// ── Inspect drag to rotate ──
-let isDragging=false, lastX=0, lastY=0;
-let rotX=0.1, rotY2=Math.PI; // start showing poster face (+z is spine, -z is poster, so rotate 180° to show poster)
-
-inspectCanvas.addEventListener('mousedown', e=>{isDragging=true;lastX=e.clientX;lastY=e.clientY;});
-window.addEventListener('mouseup', ()=>isDragging=false);
+// Mouse
+renderer.domElement.addEventListener('mousedown', e=>{
+  isDragging=true; autoRotate=false;
+  lastX=e.clientX; lastY=e.clientY; velX=0; velY=0;
+});
+window.addEventListener('mouseup', ()=>{
+  isDragging=false;
+  clearTimeout(autoTimer);
+  autoTimer=setTimeout(()=>autoRotate=true, 3000);
+});
 window.addEventListener('mousemove', e=>{
-  if(!isDragging||!inspectBox) return;
+  if(!isDragging)return;
   const dx=e.clientX-lastX, dy=e.clientY-lastY;
-  rotY2 += dx*0.01;
-  rotX  += dy*0.01;
-  rotX=Math.max(-Math.PI,Math.min(Math.PI,rotX));
+  velX=dx*0.008; velY=dy*0.008;
+  rotY+=velX; rotX+=velY;
   lastX=e.clientX; lastY=e.clientY;
 });
 
-// Touch rotate
-let lastTX=0,lastTY=0;
-inspectCanvas.addEventListener('touchstart', e=>{
-  isDragging=true;
-  lastTX=e.touches[0].clientX;lastTY=e.touches[0].clientY;
-  e.preventDefault();
+// Touch
+renderer.domElement.addEventListener('touchstart', e=>{
+  isDragging=true; autoRotate=false;
+  lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
+  velX=0; velY=0; e.preventDefault();
 },{passive:false});
-inspectCanvas.addEventListener('touchend', ()=>isDragging=false);
-inspectCanvas.addEventListener('touchmove', e=>{
-  if(!isDragging||!inspectBox) return;
-  const dx=e.touches[0].clientX-lastTX, dy=e.touches[0].clientY-lastTY;
-  rotY2+=dx*0.012; rotX+=dy*0.012;
-  rotX=Math.max(-Math.PI,Math.min(Math.PI,rotX));
-  lastTX=e.touches[0].clientX;lastTY=e.touches[0].clientY;
-  e.preventDefault();
-},{passive:false});
-
-// ── Auto-rotate when not dragging ──
-let autoRotateTimer=null;
-function resetAutoRotate(){
-  clearTimeout(autoRotateTimer);
-  autoRotateTimer=setTimeout(()=>isDragging=false,2000);
-}
-
-// ═══════════════════════════════════════════════
-// SECTION LABEL
-// ═══════════════════════════════════════════════
-const labelEl = document.getElementById('section-label');
-let lastLabel='',labelTimer=null;
-function updateLabel(){
-  const z = isMobile ? camera.position.z : controls.getObject().position.z;
-  let lbl='';
-  if(z>2)          lbl='ENTRANCE';
-  else if(z>-6)   lbl='🎬 NEW RELEASES · 🎭 DRAMA';
-  else if(z>-14)  lbl='💥 ACTION · 🚀 SCI-FI';
-  else if(z>-22)  lbl='😂 COMEDY · 😱 THRILLER';
-  else if(z>-30)  lbl='👻 HORROR · 🎨 ANIMATION';
-  else             lbl='⭐ BACK WALL';
-  if(lbl!==lastLabel){
-    lastLabel=lbl;labelEl.textContent=lbl;
-    labelEl.classList.add('show');clearTimeout(labelTimer);
-    labelTimer=setTimeout(()=>labelEl.classList.remove('show'),2400);
-  }
-}
-
-// ═══════════════════════════════════════════════
-// MAIN LOOP
-// ═══════════════════════════════════════════════
-let frameId;
-function animate(){
-  frameId=requestAnimationFrame(animate);
-  updateMovement();
-  if(!inspectOpen) checkHover();
-  if(!inspectOpen) updateNearbyPosters();
-  renderer.render(scene,camera);
-
-  // Inspect view
-  if(inspectOpen&&inspectBox){
-    if(!isDragging){
-      rotY2 += 0.003; // gentle auto-rotate
-    }
-    inspectBox.rotation.x = rotX;
-    inspectBox.rotation.y = rotY2;
-    iRenderer.render(iScene,iCamera);
-  }
-
-  updateLabel();
-}
-
-// ═══════════════════════════════════════════════
-// RESIZE
-// ═══════════════════════════════════════════════
-window.addEventListener('resize',()=>{
-  const W2=window.innerWidth,H2=window.innerHeight;
-  camera.aspect=W2/H2; camera.updateProjectionMatrix();
-  renderer.setSize(W2,H2);
-  if(inspectOpen) resizeInspect();
+window.addEventListener('touchend', ()=>{
+  isDragging=false;
+  clearTimeout(autoTimer);
+  autoTimer=setTimeout(()=>autoRotate=true, 3000);
 });
+window.addEventListener('touchmove', e=>{
+  if(!isDragging)return;
+  const dx=e.touches[0].clientX-lastX, dy=e.touches[0].clientY-lastY;
+  velX=dx*0.01; velY=dy*0.01;
+  rotY+=velX; rotX+=velY;
+  lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
+  e.preventDefault();
+},{passive:false});
 
-// ═══════════════════════════════════════════════
-// INIT
-// ═══════════════════════════════════════════════
-async function init(){
-  const bar=document.getElementById('ld-br'),st=document.getElementById('ld-st');
-  const retry=document.getElementById('ld-re');
-  retry.style.display='none'; bar.style.width='0%';
-  let fail=false;
-  for(let i=0;i<GENRES.length;i++){
-    st.textContent=`Loading ${GENRES[i].label}...`;
-    try{await fetchGenre(GENRES[i],i);}catch(e){console.warn(e);fail=true;}
-    bar.style.width=`${Math.round((i+1)/GENRES.length*100)}%`;
-  }
-  if(fail&&POOL.every(p=>!p.length)){
-    st.textContent='Connection failed.';retry.style.display='block';return;
-  }
-  st.textContent='Building store...';
-  try {
-    await buildStore();
-  } catch(e) {
-    st.textContent = 'CRASH: ' + e.message;
-    console.error(e);
-    document.getElementById('ld-re').style.display='block';
-    return;
-  }
-  st.textContent=`Ready! (${allBoxes.length} boxes placed)`;
-  // Show box count briefly in HUD
-  const countEl = document.createElement('div');
-  countEl.style.cssText='position:fixed;top:100px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);color:#0f0;font-family:monospace;font-size:14px;padding:6px 12px;border-radius:4px;z-index:999;';
-  countEl.textContent = `${allBoxes.length} boxes in scene`;
-  document.body.appendChild(countEl);
-  setTimeout(()=>countEl.remove(), 8000);
-  await new Promise(r=>setTimeout(r,300));
-  document.getElementById('loading').classList.add('out');
-  setTimeout(()=>document.getElementById('loading').style.display='none',600);
+// ── Animation loop ────────────────────────────────────────────
+const infoEl = document.getElementById('info');
 
-  // Start render loop
-  animate();
-
-  // Auto-lock pointer on click
-  st.textContent='Click to enter store';
+function animate(){
+  requestAnimationFrame(animate);
+  if(autoRotate){
+    rotY += 0.004;
+    velX *= 0.95; velY *= 0.95;
+  } else if(!isDragging){
+    rotY += velX; rotX += velY;
+    velX *= 0.90; velY *= 0.90;
+  }
+  // Clamp vertical rotation
+  rotX = Math.max(-Math.PI*0.45, Math.min(Math.PI*0.45, rotX));
+  box.rotation.set(rotX, rotY, 0);
+  renderer.render(scene, camera);
+  infoEl.textContent = 'DRAG TO ROTATE · RELEASE TO AUTO-SPIN';
 }
+animate();
 
-window.init = init;
-init();
+// ── Resize ────────────────────────────────────────────────────
+window.addEventListener('resize', ()=>{
+  camera.aspect=window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
 </script>
 </body>
 </html>
