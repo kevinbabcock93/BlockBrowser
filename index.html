@@ -189,11 +189,12 @@ async function fetchGenre(g, idx) {
     : g.lt==='now_playing'
     ? `${TMDB_BASE}/movie/now_playing?api_key=${TMDB_KEY}&page=${p}`
     : `${TMDB_BASE}/movie/popular?api_key=${TMDB_KEY}&page=${p}`;
-  const [r1,r2] = await Promise.all([fetch(u(1)),fetch(u(2))]);
-  if(!r1.ok) throw new Error(r1.status);
-  const [d1,d2] = await Promise.all([r1.json(),r2.json()]);
+  // Fetch 4 pages = up to ~80 unique movies per genre
+  const responses = await Promise.all([1,2,3,4].map(p=>
+    fetch(u(p)).then(r=>r.ok?r.json():null).catch(()=>null)
+  ));
   const seen = new Set();
-  POOL[idx] = [...(d1.results||[]),...(d2.results||[])].filter(m=>{
+  POOL[idx] = responses.flatMap(d=>d?.results||[]).filter(m=>{
     if(seen.has(m.id))return false; seen.add(m.id); return true;
   }).map(m=>({
     id: m.id,
@@ -574,18 +575,16 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
 
   for(let row=0; row<ROWS_PER_UNIT; row++){
     for(let col=0; col<boxCount; col++){
-      // Use modulo so every row is filled even if pool is smaller than total slots
-      const idx = startOffset + ((row * boxCount + col) % pool.length);
+      const idx = startOffset + (row * boxCount + col);
+      if(idx >= pool.length) break; // stop — no more unique movies
       const movie = pool[idx];
       if(!movie) continue;
       placed++;
       const box = createVHSBox(movie);
-      // No rotation — poster (+z face) already faces the player
-      // VHS_D runs along shelf X, VHS_W goes back into shelf
       box.position.set(
         startX + col*BOX_ALONG_SHELF,
         row*ROW_SPACING + VHS_H/2 + 0.018,
-        -VHS_D/2  // box center: depth goes back into shelf, face flush with front
+        -VHS_D/2
       );
       box.userData.shelfPos   = box.position.clone();
       box.userData.shelfGroup = group;
