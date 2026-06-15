@@ -287,30 +287,95 @@ const VHS_D  = 0.028;
 
 const texLoader = new THREE.TextureLoader();
 
-// Atlas system removed — using solid genre colors for shelf boxes
-
-// Shared geometry and plain materials — created ONCE, reused by all boxes
+// ── Shared geometry & plain plastic materials ──────────────
+// Created ONCE, reused by every box in the store
 const VHS_GEO    = new THREE.BoxGeometry(VHS_D, VHS_H, VHS_W);
-const MAT_SIDE   = new THREE.MeshLambertMaterial({color:0xddd8cc});
-const MAT_TOP    = new THREE.MeshLambertMaterial({color:0xf0e8dc});
-const MAT_BOTTOM = new THREE.MeshLambertMaterial({color:0xc8c0b4});
+const MAT_PLASTIC = new THREE.MeshStandardMaterial({color:0xe0d8cc, roughness:0.25, metalness:0.0});
+const MAT_TOP     = new THREE.MeshStandardMaterial({color:0xd8d0c4, roughness:0.2,  metalness:0.02});
+const MAT_BOTTOM  = new THREE.MeshStandardMaterial({color:0xb8b0a4, roughness:0.4,  metalness:0.0});
 
-// One solid-color spine material per genre — 8 total, shared by ALL boxes
-// Zero textures on shelf = zero GPU texture limit issues on mobile
-const genreSpineMats = GENRES.map(g =>
-  new THREE.MeshLambertMaterial({color: g.color})
-);
+// ── Spine canvas — one per box, cached by movie id ─────────
+const spineCache = new Map();
+function makeSpineTex(movie) {
+  if(spineCache.has(movie.id)) return spineCache.get(movie.id);
+  const c=document.createElement('canvas'); c.width=64; c.height=512;
+  const x=c.getContext('2d');
+  // Off-white plastic
+  x.fillStyle='#e8e2d8'; x.fillRect(0,0,64,512);
+  // Dark label, edge to edge with 2px border
+  x.fillStyle='#0a0a14'; x.fillRect(2,2,60,508);
+  // Gradient sheen
+  const g=x.createLinearGradient(0,0,64,0);
+  g.addColorStop(0,'rgba(255,255,255,0.1)'); g.addColorStop(1,'rgba(0,0,0,0.15)');
+  x.fillStyle=g; x.fillRect(2,2,60,508);
+  // Title rotated vertical — white, tight
+  x.save();
+  x.translate(32,256); x.rotate(-Math.PI/2);
+  x.fillStyle='#ffffff';
+  x.font='bold 13px Arial Narrow,Arial';
+  x.textAlign='center'; x.textBaseline='middle';
+  x.fillText(movie.title.toUpperCase().slice(0,22), 0, 0);
+  x.restore();
+  // Year at bottom
+  x.save();
+  x.translate(32,475); x.rotate(-Math.PI/2);
+  x.fillStyle='rgba(255,255,255,0.35)';
+  x.font='9px Arial'; x.textAlign='center'; x.textBaseline='middle';
+  x.fillText(movie.year||'', 0, 0);
+  x.restore();
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace;
+  spineCache.set(movie.id, t);
+  return t;
+}
 
-// createVHSBox — shared geometry, shared materials, zero allocation per box
-function createVHSBox(movie, col) {
-  const gi = movie.genreIdx;
+// ── Poster texture cache — loaded lazily by distance ───────
+const posterCache = new Map(); // movieId → {tex, loaded, loading}
+
+function getPosterMat(movie) {
+  if(!posterCache.has(movie.id)){
+    // Placeholder material — genre color
+    const mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(`hsl(${movie.hue},40%,20%)`),
+      roughness:0.15, metalness:0.0
+    });
+    posterCache.set(movie.id, {mat, loaded:false, loading:false});
+  }
+  return posterCache.get(movie.id).mat;
+}
+
+function loadPosterIfNeeded(movie) {
+  if(!movie.posterSm) return;
+  const entry = posterCache.get(movie.id);
+  if(!entry || entry.loaded || entry.loading) return;
+  entry.loading = true;
+  texLoader.load(movie.posterSm, tex=>{
+    tex.colorSpace = THREE.SRGBColorSpace;
+    entry.mat.map = tex;
+    entry.mat.color.set(0xffffff);
+    entry.mat.roughness = 0.12;
+    entry.mat.needsUpdate = true;
+    entry.loaded = true;
+  });
+}
+
+// ── createVHSBox ────────────────────────────────────────────
+// BoxGeometry face order: +x, -x, +y, -y, +z, -z
+// Orientation: +z = FRONT (poster, faces player when looking at shelf)
+//              -x = SPINE (faces player when box is spine-out on shelf)
+//              +y = TOP
+function createVHSBox(movie) {
+  const spineMat = new THREE.MeshStandardMaterial({
+    map: makeSpineTex(movie), roughness:0.2, metalness:0.0
+  });
+  const posterMat = getPosterMat(movie);
+
   const mesh = new THREE.Mesh(VHS_GEO, [
-    MAT_SIDE,
-    MAT_SIDE,
-    MAT_TOP,
-    MAT_BOTTOM,
-    genreSpineMats[gi], // solid genre color spine
-    MAT_SIDE,
+    MAT_PLASTIC,  // +x right edge
+    spineMat,     // -x SPINE ← faces player when box is spine-out
+    MAT_TOP,      // +y top
+    MAT_BOTTOM,   // -y bottom
+    posterMat,    // +z FRONT poster
+    MAT_PLASTIC,  // -z back
   ]);
   mesh.castShadow    = false;
   mesh.receiveShadow = false;
@@ -320,28 +385,30 @@ function createVHSBox(movie, col) {
   return group;
 }
 
-// createInspectBox — only created when player picks up a box
-// Loads poster texture at this point only
+// ── createInspectBox ────────────────────────────────────────
+// Full quality box for the pickup view — loads large poster
 function createInspectBox(movie) {
+  const spineMat = new THREE.MeshStandardMaterial({
+    map: makeSpineTex(movie), roughness:0.18, metalness:0.0
+  });
   const posterMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color().setHSL(movie.hue/360, 0.4, 0.2),
-    roughness:0.14, metalness:0.04
+    color: new THREE.Color(`hsl(${movie.hue},40%,20%)`),
+    roughness:0.12, metalness:0.0
   });
   if(movie.posterSm){
-    const t = new THREE.TextureLoader().load(movie.posterSm);
-    t.colorSpace = THREE.SRGBColorSpace;
-    posterMat.map = t; posterMat.needsUpdate = true;
+    texLoader.load(movie.posterSm, tex=>{
+      tex.colorSpace=THREE.SRGBColorSpace;
+      posterMat.map=tex; posterMat.color.set(0xffffff);
+      posterMat.needsUpdate=true;
+    });
   }
-  const spineMat = new THREE.MeshStandardMaterial({
-    color: GENRES[movie.genreIdx].color, roughness:0.18, metalness:0.04
-  });
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(VHS_D, VHS_H, VHS_W), [
-    new THREE.MeshStandardMaterial({color:0xddd8cc, roughness:0.2}),
-    new THREE.MeshStandardMaterial({color:0xddd8cc, roughness:0.2}),
-    new THREE.MeshStandardMaterial({color:0xf0e8dc, roughness:0.12, metalness:0.06}),
-    new THREE.MeshStandardMaterial({color:0xc8c0b4, roughness:0.35}),
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(VHS_D,VHS_H,VHS_W), [
+    new THREE.MeshStandardMaterial({color:0xe0d8cc, roughness:0.25}),
     spineMat,
+    new THREE.MeshStandardMaterial({color:0xd8d0c4, roughness:0.2, metalness:0.02}),
+    new THREE.MeshStandardMaterial({color:0xb8b0a4, roughness:0.4}),
     posterMat,
+    new THREE.MeshStandardMaterial({color:0x0a0a14, roughness:0.3}),
   ]);
   mesh.userData.movie = movie;
   const group = new THREE.Group();
@@ -349,7 +416,19 @@ function createInspectBox(movie) {
   return group;
 }
 
-// (atlas system no longer used for shelf boxes)
+// ── Lazy poster loading — called each frame for nearby boxes ─
+const POSTER_LOAD_DIST = 4.0; // load posters within this distance
+function updateNearbyPosters() {
+  const pos = camera.position;
+  for(const box of allBoxes){
+    const wp = new THREE.Vector3();
+    box.getWorldPosition(wp);
+    const dist = pos.distanceTo(wp);
+    if(dist < POSTER_LOAD_DIST){
+      loadPosterIfNeeded(box.children[0]?.userData.movie);
+    }
+  }
+}
 
 // ═══════════════════════════════════════════════
 // SHELF SYSTEM
@@ -433,10 +512,10 @@ const SIGN_GEO  = new THREE.BoxGeometry(1, 0.25, 0.04);  // scaled per shelf
 
 function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
   const group = new THREE.Group();
-  // Raise shelf so middle row is at eye height (1.65m)
+  // Raise shelf so middle rows are at eye height (1.65m)
   // Shelf height = ROWS_PER_UNIT * ROW_SPACING = 8 * 0.20 = 1.6m
-  // Middle at 0.8m → need base at 1.65 - 0.8 = 0.85m off floor
-  group.position.set(posX, 0.05, posZ);
+  // To center: base at 1.65 - 0.8 = 0.85m
+  group.position.set(posX, 0.85, posZ);
   group.rotation.y = rotY;
   scene.add(group);
 
@@ -488,33 +567,37 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
     maxZ: Math.max(...corners.map(c=>c.wz)) + 0.05,
   });
 
-  // Place boxes
+  // Place boxes — fill every row, cycling through pool if needed
   const boxCount = Math.min(Math.floor(length / BOX_ALONG_SHELF), BOXES_PER_ROW);
   const startX   = -(boxCount * BOX_ALONG_SHELF)/2 + BOX_ALONG_SHELF/2;
   const startOffset = genrePoolOffset[genreIdx];
   let placed = 0;
-  console.log(`Shelf gi=${genreIdx} length=${length} boxCount=${boxCount} poolLen=${pool.length} offset=${startOffset}`);
-  if(pool.length === 0) { console.warn('POOL EMPTY for genre', genreIdx); return; }
 
   for(let row=0; row<ROWS_PER_UNIT; row++){
     for(let col=0; col<boxCount; col++){
-      const idx = startOffset + placed;
-      if(idx >= pool.length) break;
+      // Use modulo so every row is filled even if pool is smaller than total slots
+      const idx = startOffset + ((row * boxCount + col) % pool.length);
       const movie = pool[idx];
+      if(!movie) continue;
       placed++;
-      const box = createVHSBox(movie, col);
+      const box = createVHSBox(movie);
+      // Rotate so spine (-x face) faces the aisle (toward player)
+      // The shelf group's rotY handles which direction the shelf faces,
+      // so we rotate the box 90° around Y so -x → +z (toward player)
+      box.rotation.y = -Math.PI / 2;
       box.position.set(
         startX + col*BOX_ALONG_SHELF,
         row*ROW_SPACING + VHS_H/2 + 0.018,
         -VHS_W/2
       );
-      box.userData.shelfPos  = box.position.clone();
+      box.userData.shelfPos   = box.position.clone();
       box.userData.shelfGroup = group;
       group.add(box);
       allBoxes.push(box);
     }
   }
-  genrePoolOffset[genreIdx] += placed;
+  // Only advance offset by one full row worth so genres stay somewhat distinct
+  genrePoolOffset[genreIdx] = (startOffset + boxCount) % pool.length;
 }
 
 const isMobile = 'ontouchstart' in window;
@@ -857,6 +940,7 @@ function animate(){
   frameId=requestAnimationFrame(animate);
   updateMovement();
   if(!inspectOpen) checkHover();
+  if(!inspectOpen) updateNearbyPosters();
   renderer.render(scene,camera);
 
   // Inspect view
