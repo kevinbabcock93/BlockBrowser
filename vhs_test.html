@@ -98,7 +98,7 @@ const loader = new THREE.TextureLoader();
 
 // TMDB movie — using a real poster
 const TMDB_KEY = '03549aee0d249c4c994eaf6f2f579cf2';
-const INFO_URL = `https://api.themoviedb.org/3/movie/27205?api_key=${TMDB_KEY}`; // Inception
+const MOVIE_ID = 27205; // Inception — change to test different movies
 
 let movie = {
   title: 'INCEPTION',
@@ -109,104 +109,213 @@ let movie = {
   posterUrl: null,
 };
 
-// Fetch movie data
-fetch(INFO_URL)
+// Fetch movie data + credits + images
+const MOVIE_ID = 27205; // Inception
+fetch(`https://api.themoviedb.org/3/movie/${MOVIE_ID}?api_key=${TMDB_KEY}&append_to_response=credits,images`)
   .then(r=>r.json())
-  .then(d=>{
-    movie.title = d.title || movie.title;
-    movie.year = (d.release_date||'').slice(0,4) || movie.year;
-    movie.rating = d.vote_average?.toFixed(1) || movie.rating;
-    movie.desc = d.overview?.slice(0,180) || movie.desc;
+  .then(async d=>{
+    movie.title    = d.title || movie.title;
+    movie.year     = (d.release_date||'').slice(0,4) || movie.year;
+    movie.rating   = d.vote_average?.toFixed(1) || movie.rating;
+    movie.runtime  = d.runtime ? `${d.runtime} MIN` : '';
+    movie.desc     = d.overview?.slice(0,280) || movie.desc;
+    movie.genre    = d.genres?.[0]?.name?.toUpperCase() || movie.genre;
+    movie.director = d.credits?.crew?.find(c=>c.job==='Director')?.name || '';
+    movie.cast     = d.credits?.cast?.slice(0,4).map(c=>c.name).join(', ') || '';
+
+    document.getElementById('title').textContent = movie.title;
+
+    // Load poster
     if(d.poster_path){
       movie.posterUrl = `https://image.tmdb.org/t/p/w500${d.poster_path}`;
       updatePosterMaterial(movie.posterUrl);
     }
-    document.getElementById('title').textContent = movie.title;
-    updateBackMaterial();
+
+    // Load up to 3 backdrop images for back cover
+    const backdrops = (d.images?.backdrops||[]).slice(0,3);
+    const backdropImgs = await Promise.all(backdrops.map(b=>
+      new Promise(res=>{
+        const img=new Image(); img.crossOrigin='anonymous';
+        img.onload=()=>res(img);
+        img.onerror=()=>res(null);
+        img.src=`https://image.tmdb.org/t/p/w300${b.file_path}`;
+      })
+    ));
+    const loadedImgs = backdropImgs.filter(Boolean);
+
+    // Build back and spine with real data
+    backMat.map = makeBackCanvas(loadedImgs);
+    backMat.needsUpdate = true;
+    spineMat.map = makeSpineCanvas();
+    spineMat.needsUpdate = true;
   })
-  .catch(()=>{});
+  .catch(e=>console.warn('TMDB fetch failed',e));
 
 // ── Canvas textures ───────────────────────────────────────────
 
 function makeSpineCanvas() {
-  const c = document.createElement('canvas'); c.width=128; c.height=512;
+  const c = document.createElement('canvas'); c.width=64; c.height=512;
   const x = c.getContext('2d');
-  // Off-white plastic base
-  x.fillStyle = '#ddd5c8'; x.fillRect(0,0,128,512);
-  // Dark label strip
-  x.fillStyle = '#111122';
-  x.fillRect(12, 30, 104, 452);
-  // Subtle gradient on label
-  const g = x.createLinearGradient(12,0,116,0);
-  g.addColorStop(0, 'rgba(255,255,255,0.12)');
-  g.addColorStop(0.4, 'rgba(255,255,255,0.03)');
-  g.addColorStop(1, 'rgba(0,0,0,0.15)');
-  x.fillStyle=g; x.fillRect(12,30,104,452);
-  // Title rotated
+
+  // Full white plastic case
+  x.fillStyle = '#e8e2d8'; x.fillRect(0,0,64,512);
+
+  // Thin label — goes almost edge to edge, just 2px border
+  x.fillStyle = '#0a0a14'; x.fillRect(2, 2, 60, 508);
+
+  // Very subtle gradient on label
+  const g = x.createLinearGradient(0,0,64,0);
+  g.addColorStop(0,'rgba(255,255,255,0.08)');
+  g.addColorStop(0.5,'rgba(255,255,255,0.01)');
+  g.addColorStop(1,'rgba(0,0,0,0.12)');
+  x.fillStyle=g; x.fillRect(2,2,60,508);
+
+  // Title — rotated, white text, tight to label
   x.save();
-  x.translate(64, 256);
+  x.translate(32, 256);
   x.rotate(-Math.PI/2);
-  x.fillStyle = '#FFD700';
-  x.font = 'bold 28px Arial Black, Arial';
+  x.fillStyle = '#ffffff';
+  x.font = 'bold 15px Arial Narrow, Arial';
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.letterSpacing = '2px';
+  x.fillText(movie.title.toUpperCase(), 0, 0);
+  x.restore();
+
+  // Small studio placeholder at bottom
+  x.save();
+  x.translate(32, 478);
+  x.rotate(-Math.PI/2);
+  x.fillStyle='rgba(255,255,255,0.3)';
+  x.font='8px Arial';
   x.textAlign='center'; x.textBaseline='middle';
-  x.shadowColor='rgba(0,0,0,0.8)'; x.shadowBlur=4;
-  x.fillText(movie.title, 0, 0);
+  x.fillText(movie.year, 0, 0);
   x.restore();
-  // Year at bottom of spine
-  x.save();
-  x.translate(64, 460);
-  x.rotate(-Math.PI/2);
-  x.fillStyle='rgba(255,255,255,0.5)';
-  x.font='14px Arial'; x.textAlign='center'; x.textBaseline='middle';
-  x.fillText(movie.year||'', 0, 0);
-  x.restore();
-  // Plastic edge highlights
-  x.fillStyle='rgba(255,255,255,0.5)'; x.fillRect(0,0,10,512);
-  x.fillStyle='rgba(0,0,0,0.3)'; x.fillRect(118,0,10,512);
-  // Top/bottom plastic caps
-  x.fillStyle='#ccc5b8'; x.fillRect(0,0,128,28);
-  x.fillStyle='#ccc5b8'; x.fillRect(0,484,128,28);
+
   const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t;
 }
 
-function makeBackCanvas() {
-  const c=document.createElement('canvas'); c.width=512; c.height=768;
+// Back cover — built async once backdrop images load
+function makeBackCanvas(backdrops=[]) {
+  const cw=512, ch=768;
+  const c=document.createElement('canvas'); c.width=cw; c.height=ch;
   const x=c.getContext('2d');
-  // Dark background
-  x.fillStyle='#0e0e1a'; x.fillRect(0,0,512,768);
-  // Genre color strip at top
-  x.fillStyle='#1a1a3a'; x.fillRect(0,0,512,60);
-  x.fillStyle='rgba(255,215,0,0.9)';
-  x.font='bold 20px Arial Black'; x.textAlign='left'; x.textBaseline='middle';
-  x.fillText(movie.genre, 20, 30);
-  // Rating badge
-  x.fillStyle='#FFD700'; x.fillRect(430,12,68,36);
-  x.fillStyle='#111'; x.font='bold 18px Arial Black'; x.textAlign='center';
-  x.fillText(`★ ${movie.rating}`, 464, 30);
-  // Title
-  x.fillStyle='#ffffff'; x.font='bold 32px Arial Black'; x.textAlign='left';
-  const titleWords = movie.title.split(' ');
-  let tline='', ty=100;
-  titleWords.forEach(w=>{
-    if(x.measureText(tline+w).width>460){x.fillText(tline.trim(),24,ty);tline='';ty+=40;}
-    tline+=w+' ';
-  });
-  if(tline.trim()) x.fillText(tline.trim(),24,ty); ty+=50;
-  // Synopsis
-  x.fillStyle='rgba(255,255,255,0.75)'; x.font='16px Arial';
-  const words=movie.desc.split(' ');
-  let line2='',sy=ty;
-  words.forEach(w=>{
-    if(x.measureText(line2+w).width>460){x.fillText(line2.trim(),24,sy);line2='';sy+=24;}
-    line2+=w+' ';
-  });
-  if(line2.trim()) x.fillText(line2.trim(),24,sy);
-  // Barcode
-  x.fillStyle='#fff'; x.fillRect(160,690,192,50);
-  x.fillStyle='#000';
-  for(let i=0;i<60;i++){
-    if(Math.random()>0.4){x.fillRect(162+i*3,692,Math.random()>0.5?1:2,46);}
+
+  // Background — dark navy, like real VHS back
+  x.fillStyle='#080810'; x.fillRect(0,0,cw,ch);
+
+  let yOffset = 0;
+
+  // ── Screenshot images grid ──────────────────────────────
+  // Arrange up to 3 backdrop images across the top 40% of back
+  const imgH = Math.round(ch * 0.38);
+  if(backdrops.length >= 3){
+    // 3 images side by side
+    const iw = Math.floor(cw/3)-2;
+    for(let i=0;i<3;i++){
+      try{ x.drawImage(backdrops[i], i*(iw+2), 0, iw, imgH); }catch(_){}
+    }
+    // Thin separator line
+    x.fillStyle='rgba(255,255,255,0.15)'; x.fillRect(0,imgH,cw,1);
+    yOffset = imgH + 8;
+  } else if(backdrops.length === 2){
+    const iw = Math.floor(cw/2)-1;
+    for(let i=0;i<2;i++){
+      try{ x.drawImage(backdrops[i], i*(iw+1), 0, iw, imgH); }catch(_){}
+    }
+    x.fillStyle='rgba(255,255,255,0.15)'; x.fillRect(0,imgH,cw,1);
+    yOffset = imgH + 8;
+  } else if(backdrops.length === 1){
+    try{ x.drawImage(backdrops[0], 0, 0, cw, imgH); }catch(_){}
+    x.fillStyle='rgba(255,255,255,0.15)'; x.fillRect(0,imgH,cw,1);
+    yOffset = imgH + 8;
+  } else {
+    // No images — colored header band instead
+    x.fillStyle='#1a1a3a'; x.fillRect(0,0,cw,60);
+    yOffset = 68;
   }
+
+  // ── Title ────────────────────────────────────────────────
+  x.fillStyle='#ffffff';
+  x.font='bold 28px Arial Black, Arial';
+  x.textAlign='left'; x.textBaseline='top';
+  x.fillText(movie.title.toUpperCase(), 16, yOffset);
+  yOffset += 36;
+
+  // Year · Rating · Runtime row
+  x.fillStyle='rgba(255,255,255,0.55)';
+  x.font='12px Arial';
+  x.fillText(`${movie.year}  ·  ★ ${movie.rating}  ·  ${movie.runtime||''}`, 16, yOffset);
+  yOffset += 22;
+
+  // Thin rule
+  x.fillStyle='rgba(255,255,255,0.15)'; x.fillRect(16,yOffset,cw-32,1);
+  yOffset += 10;
+
+  // ── Synopsis ─────────────────────────────────────────────
+  x.fillStyle='rgba(255,255,255,0.82)';
+  x.font='13px Arial';
+  const words = movie.desc.split(' ');
+  let line='', lineH=19;
+  for(const w of words){
+    const test=line+w+' ';
+    if(x.measureText(test).width > cw-32 && line!==''){
+      x.fillText(line.trim(), 16, yOffset);
+      line=w+' '; yOffset+=lineH;
+      if(yOffset > ch-140) break;
+    } else { line=test; }
+  }
+  if(line.trim() && yOffset <= ch-140){ x.fillText(line.trim(),16,yOffset); yOffset+=lineH; }
+  yOffset += 10;
+
+  // ── Cast line ────────────────────────────────────────────
+  if(movie.cast){
+    x.fillStyle='rgba(255,255,255,0.4)';
+    x.font='11px Arial';
+    x.fillText(`CAST: ${movie.cast}`, 16, yOffset);
+    yOffset += 18;
+  }
+
+  // ── Director line ────────────────────────────────────────
+  if(movie.director){
+    x.fillStyle='rgba(255,255,255,0.4)';
+    x.font='11px Arial';
+    x.fillText(`DIRECTED BY ${movie.director.toUpperCase()}`, 16, yOffset);
+    yOffset += 18;
+  }
+
+  // ── Bottom section ───────────────────────────────────────
+  // Rating badge
+  x.fillStyle='rgba(255,255,255,0.08)';
+  x.fillRect(0, ch-90, cw, 90);
+  x.fillStyle='rgba(255,255,255,0.15)';
+  x.fillRect(0, ch-90, cw, 1);
+
+  // Studio / disclaimer text
+  x.fillStyle='rgba(255,255,255,0.25)';
+  x.font='9px Arial';
+  x.textAlign='left';
+  x.fillText('© Warner Bros. Entertainment Inc. All Rights Reserved.', 16, ch-72);
+  x.fillText('Manufactured and distributed under license.', 16, ch-60);
+  x.fillText(`NOT FOR SALE OR RENTAL  ·  ${movie.year}`, 16, ch-48);
+
+  // Barcode
+  x.fillStyle='#ffffff'; x.fillRect(cw-120, ch-76, 104, 46);
+  x.fillStyle='#000000';
+  for(let i=0;i<36;i++){
+    const bw = Math.random()>0.6?3:Math.random()>0.4?2:1;
+    x.fillRect(cw-118+i*2.7, ch-74, bw, 38);
+  }
+  x.fillStyle='#000'; x.font='8px Arial'; x.textAlign='center';
+  x.fillText('5 01234 56789 0', cw-68, ch-36);
+
+  // Rating box
+  x.fillStyle='#ffffff'; x.fillRect(14, ch-76, 46, 46);
+  x.fillStyle='#000'; x.font='bold 13px Arial Black'; x.textAlign='center';
+  x.fillText('PG-13', 37, ch-58);
+  x.fillStyle='#555'; x.font='8px Arial';
+  x.fillText('RATED', 37, ch-46);
+
   const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t;
 }
 
@@ -308,13 +417,6 @@ function updatePosterMaterial(url) {
     posterMat.roughness = 0.12;
     posterMat.needsUpdate = true;
   });
-}
-
-function updateBackMaterial() {
-  backMat.map = makeBackCanvas();
-  backMat.needsUpdate = true;
-  spineMat.map = makeSpineCanvas();
-  spineMat.needsUpdate = true;
 }
 
 // ── Rotation state ────────────────────────────────────────────
