@@ -442,19 +442,11 @@ function updateNearbyPosters() {
 const ROWS_PER_UNIT = 8;  // 8 rows × 0.20m = 1.6m tall shelf, eye level at row 4
 const BOXES_PER_ROW = 20;
 const ROW_SPACING   = VHS_H + 0.01;      // vertical gap between rows
-const BOX_SPACING   = VHS_D + 0.005;     // boxes packed spine-out along Z-ish axis
-// Wait — in a real shelf, boxes are SPINE-OUT facing the aisle
-// Box depth (VHS_D=0.028m) is what stacks along the wall
-// Box width (VHS_W=0.104m) is the height of each "slot" in the row... no
-// Actually spine-out means:
-//   - The spine face is what you see when looking down the aisle
-//   - The box sits with its DEPTH going into the shelf
-//   - Boxes are arranged side by side along the shelf LENGTH
-//   - The "width" of shelf space each box takes = VHS_W (0.104m)
-// So along shelf axis: VHS_W + gap per box
-// Each box takes VHS_D width along shelf (spine faces out, case goes back into shelf)
-// Plus tiny gap between spines
-const BOX_ALONG_SHELF = VHS_D + 0.003;
+const BOX_SPACING   = VHS_D + 0.003;
+// Face-out: poster (+z face) faces the player
+// Box depth (VHS_D=0.028m) runs along shelf length
+// Box width (VHS_W=0.104m) goes back into shelf
+const BOX_ALONG_SHELF = VHS_D + 0.003; // 0.031m per slot
 
 // Shelf plank material
 const shelfMat = new THREE.MeshStandardMaterial({color:0x3a2208, roughness:0.8, metalness:0.05});
@@ -581,14 +573,12 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
       if(!movie) continue;
       placed++;
       const box = createVHSBox(movie);
-      // Rotate so spine (-x face) faces the aisle (toward player)
-      // The shelf group's rotY handles which direction the shelf faces,
-      // so we rotate the box 90° around Y so -x → +z (toward player)
-      box.rotation.y = -Math.PI / 2;
+      // No rotation — poster (+z face) already faces the player
+      // VHS_D runs along shelf X, VHS_W goes back into shelf
       box.position.set(
         startX + col*BOX_ALONG_SHELF,
         row*ROW_SPACING + VHS_H/2 + 0.018,
-        -VHS_W/2
+        -VHS_W/2  // push case back so poster face is flush with shelf front
       );
       box.userData.shelfPos   = box.position.clone();
       box.userData.shelfGroup = group;
