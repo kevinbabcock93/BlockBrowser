@@ -289,7 +289,14 @@ const texLoader = new THREE.TextureLoader();
 
 // ── Shared geometry & plain plastic materials ──────────────
 // Created ONCE, reused by every box in the store
-const VHS_GEO    = new THREE.BoxGeometry(VHS_D, VHS_H, VHS_W);
+// Face-out VHS box geometry:
+// +z face (poster) = VHS_W wide × VHS_H tall  ← what player sees
+// depth into shelf = VHS_D (2.8cm)
+// BoxGeometry(width, height, depth) where:
+//   width  = VHS_W (runs along shelf X, this is what separates boxes)
+//   height = VHS_H
+//   depth  = VHS_D (goes back into shelf)
+const VHS_GEO    = new THREE.BoxGeometry(VHS_W, VHS_H, VHS_D);
 const MAT_PLASTIC = new THREE.MeshStandardMaterial({color:0xe0d8cc, roughness:0.25, metalness:0.0});
 const MAT_TOP     = new THREE.MeshStandardMaterial({color:0xd8d0c4, roughness:0.2,  metalness:0.02});
 const MAT_BOTTOM  = new THREE.MeshStandardMaterial({color:0xb8b0a4, roughness:0.4,  metalness:0.0});
@@ -417,7 +424,7 @@ function createInspectBox(movie) {
 }
 
 // ── Lazy poster loading — called each frame for nearby boxes ─
-const POSTER_LOAD_DIST = 4.0; // load posters within this distance
+const POSTER_LOAD_DIST = 6.0; // load posters within 6 world units
 function updateNearbyPosters() {
   const pos = camera.position;
   for(const box of allBoxes){
@@ -439,14 +446,14 @@ function updateNearbyPosters() {
 // - 3 freestanding aisle shelf units
 // - Each shelf unit: 6 rows of boxes, 20 boxes per row
 
-const ROWS_PER_UNIT = 8;  // 8 rows × 0.20m = 1.6m tall shelf, eye level at row 4
-const BOXES_PER_ROW = 20;
-const ROW_SPACING   = VHS_H + 0.01;      // vertical gap between rows
+const ROWS_PER_UNIT = 10; // floor to near ceiling at ~2m tall
+const BOXES_PER_ROW = 35;
+const ROW_SPACING   = VHS_H + 0.008;
 const BOX_SPACING   = VHS_D + 0.003;
 // Face-out: poster (+z face) faces the player
 // Box depth (VHS_D=0.028m) runs along shelf length
 // Box width (VHS_W=0.104m) goes back into shelf
-const BOX_ALONG_SHELF = VHS_D + 0.003; // 0.031m per slot
+const BOX_ALONG_SHELF = VHS_W + 0.004; // 0.108m per slot — box width + tiny gap
 
 // Shelf plank material
 const shelfMat = new THREE.MeshStandardMaterial({color:0x3a2208, roughness:0.8, metalness:0.05});
@@ -507,7 +514,7 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
   // Raise shelf so middle rows are at eye height (1.65m)
   // Shelf height = ROWS_PER_UNIT * ROW_SPACING = 8 * 0.20 = 1.6m
   // To center: base at 1.65 - 0.8 = 0.85m
-  group.position.set(posX, 0.85, posZ);
+  group.position.set(posX, 0, posZ);
   group.rotation.y = rotY;
   scene.add(group);
 
@@ -578,7 +585,7 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
       box.position.set(
         startX + col*BOX_ALONG_SHELF,
         row*ROW_SPACING + VHS_H/2 + 0.018,
-        -VHS_W/2  // push case back so poster face is flush with shelf front
+        -VHS_D/2  // box center: depth goes back into shelf, face flush with front
       );
       box.userData.shelfPos   = box.position.clone();
       box.userData.shelfGroup = group;
