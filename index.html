@@ -586,7 +586,7 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
   const boxCount  = Math.min(Math.floor(length / BOX_ALONG_SHELF), BOXES_PER_ROW);
   const totalBoxW = boxCount * BOX_ALONG_SHELF;
   const startX    = -totalBoxW/2 + BOX_ALONG_SHELF/2;
-  const startOffset = genrePoolOffset[genreIdx];
+  const startOffset = genrePoolOffset[genreIdx] % pool.length;
   let placed = 0;
 
   for(let row=0; row<ROWS_PER_UNIT; row++){
@@ -1051,60 +1051,146 @@ const EMPLOYEE_DEFS = [
   {name:'Morgan', color:0x44aa66, startX: 2, startZ:-28, wanderZ:[-22,-32], wanderSpeed:0.75},
 ];
 
+const EMPLOYEE_DEFS = [
+  {name:'Alex',   skinColor:0xf5c5a0, hairColor:0x3a2010, startX: 3, startZ:-8,  wanderZ:[-5,-14],  wanderSpeed:0.8},
+  {name:'Jamie',  skinColor:0xe8b080, hairColor:0x1a1a1a, startX:-3, startZ:-18, wanderZ:[-14,-25], wanderSpeed:0.7},
+  {name:'Morgan', skinColor:0xc68642, hairColor:0x8B4513, startX: 2, startZ:-28, wanderZ:[-22,-32], wanderSpeed:0.75},
+];
+
+// Shared uniform materials
+const MAT_POLO   = new THREE.MeshStandardMaterial({color:0x1a3a99, roughness:0.8}); // royal blue
+const MAT_COLLAR = new THREE.MeshStandardMaterial({color:0xFFD700, roughness:0.7}); // yellow
+const MAT_KHAKI  = new THREE.MeshStandardMaterial({color:0xc8aa6e, roughness:0.9}); // khaki
+
 function buildEmployees(){
   for(const def of EMPLOYEE_DEFS){
     const group = new THREE.Group();
+    const skinMat = new THREE.MeshStandardMaterial({color:def.skinColor, roughness:0.6});
+    const hairMat = new THREE.MeshStandardMaterial({color:def.hairColor, roughness:0.9});
 
-    // Body
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(0.4, 0.7, 0.25),
-      new THREE.MeshStandardMaterial({color:def.color, roughness:0.7})
-    );
-    body.position.y = 0.95;
-    group.add(body);
-
-    // Head
-    const head = new THREE.Mesh(
-      new THREE.BoxGeometry(0.28, 0.28, 0.28),
-      new THREE.MeshStandardMaterial({color:0xf5d5b0, roughness:0.6})
-    );
-    head.position.y = 1.44;
-    group.add(head);
-
-    // Name tag
-    const nameC = document.createElement('canvas'); nameC.width=128; nameC.height=48;
-    const nx = nameC.getContext('2d');
-    nx.fillStyle='#ffffff'; nx.fillRect(0,0,128,48);
-    nx.fillStyle='#cc0000'; nx.font='bold 14px Arial'; nx.textAlign='center'; nx.textBaseline='middle';
-    nx.fillText('BLOCKBROWSER', 64, 14);
-    nx.fillStyle='#000'; nx.font='bold 18px Arial'; nx.fillText(def.name, 64, 34);
-    const nameTex = new THREE.CanvasTexture(nameC);
-    nameTex.colorSpace = THREE.SRGBColorSpace;
-    const nameTag = new THREE.Mesh(
-      new THREE.BoxGeometry(0.22, 0.08, 0.01),
-      new THREE.MeshStandardMaterial({map:nameTex})
-    );
-    nameTag.position.set(0, 0.88, 0.13);
-    group.add(nameTag);
-
-    // Legs
-    for(const lx of [-0.1, 0.1]){
-      const leg = new THREE.Mesh(
-        new THREE.BoxGeometry(0.14, 0.6, 0.18),
-        new THREE.MeshStandardMaterial({color:0x222244, roughness:0.8})
-      );
-      leg.position.set(lx, 0.3, 0);
+    // ── Legs (khaki pants) ──
+    for(const lx of [-0.09, 0.09]){
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.58, 0.16), MAT_KHAKI);
+      leg.position.set(lx, 0.29, 0);
       group.add(leg);
     }
+    // Shoe hint (dark)
+    for(const lx of [-0.09, 0.09]){
+      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.06, 0.20),
+        new THREE.MeshStandardMaterial({color:0x1a1a1a, roughness:0.9}));
+      shoe.position.set(lx, 0.03, 0.02);
+      group.add(shoe);
+    }
+
+    // ── Body (blue polo) ──
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.40, 0.62, 0.23), MAT_POLO);
+    body.position.y = 0.92;
+    group.add(body);
+
+    // Yellow collar strip
+    const collar = new THREE.Mesh(new THREE.BoxGeometry(0.41, 0.07, 0.24), MAT_COLLAR);
+    collar.position.set(0, 1.21, 0);
+    group.add(collar);
+
+    // Yellow sleeve ends
+    for(const sx of [-0.21, 0.21]){
+      const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.12, 0.20), MAT_COLLAR);
+      sleeve.position.set(sx, 1.00, 0);
+      group.add(sleeve);
+    }
+
+    // Arms
+    for(const sx of [-0.26, 0.26]){
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.42, 0.18), MAT_POLO);
+      arm.position.set(sx, 0.88, 0);
+      group.add(arm);
+      // Hand
+      const hand = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.12, 0.14), skinMat);
+      hand.position.set(sx, 0.63, 0);
+      group.add(hand);
+    }
+
+    // ── Neck ──
+    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.10, 0.12), skinMat);
+    neck.position.set(0, 1.27, 0);
+    group.add(neck);
+
+    // ── Head ──
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.30, 0.28), skinMat);
+    head.position.y = 1.49;
+    group.add(head);
+
+    // ── Face canvas (eyes, nose, mouth) ──
+    const faceC = document.createElement('canvas'); faceC.width=128; faceC.height=128;
+    const fx = faceC.getContext('2d');
+    // Skin
+    fx.fillStyle = `#${def.skinColor.toString(16).padStart(6,'0')}`;
+    fx.fillRect(0,0,128,128);
+    // Eyes
+    fx.fillStyle='#1a1a2e';
+    fx.fillRect(28,42,18,14); // left eye white
+    fx.fillRect(82,42,18,14);
+    fx.fillStyle='#ffffff'; fx.fillRect(30,44,14,10); fx.fillRect(84,44,14,10);
+    fx.fillStyle='#1a1a2e'; fx.fillRect(34,45,7,8); fx.fillRect(88,45,7,8); // pupils
+    fx.fillStyle='rgba(255,255,255,0.6)'; fx.fillRect(36,46,3,3); fx.fillRect(90,46,3,3); // highlight
+    // Eyebrows
+    fx.fillStyle=`#${def.hairColor.toString(16).padStart(6,'0')}`;
+    fx.fillRect(26,34,22,5);
+    fx.fillRect(80,34,22,5);
+    // Nose
+    fx.fillStyle='rgba(0,0,0,0.15)';
+    fx.fillRect(58,62,12,10);
+    // Mouth (smile)
+    fx.fillStyle='rgba(0,0,0,0.4)';
+    fx.beginPath(); fx.arc(64,90,14,0.2,Math.PI-0.2); fx.lineWidth=3; fx.strokeStyle='rgba(0,0,0,0.4)'; fx.stroke();
+    const faceTex = new THREE.CanvasTexture(faceC); faceTex.colorSpace=THREE.SRGBColorSpace;
+    const faceMat = new THREE.MeshStandardMaterial({map:faceTex, roughness:0.6});
+    // Front face of head
+    const faceQuad = new THREE.Mesh(new THREE.PlaneGeometry(0.29, 0.28), faceMat);
+    faceQuad.position.set(0, 1.49, 0.145);
+    group.add(faceQuad);
+
+    // ── Hair ──
+    const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.12, 0.30), hairMat);
+    hairTop.position.set(0, 1.67, 0);
+    group.add(hairTop);
+    const hairBack = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.22, 0.06), hairMat);
+    hairBack.position.set(0, 1.56, -0.16);
+    group.add(hairBack);
+    const hairSideL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.20, 0.24), hairMat);
+    hairSideL.position.set(-0.17, 1.56, 0);
+    group.add(hairSideL);
+    const hairSideR = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.20, 0.24), hairMat);
+    hairSideR.position.set(0.17, 1.56, 0);
+    group.add(hairSideR);
+
+    // ── Name tag on lanyard ──
+    const nameC = document.createElement('canvas'); nameC.width=128; nameC.height=64;
+    const nx = nameC.getContext('2d');
+    nx.fillStyle='#ffffff'; nx.fillRect(0,0,128,64);
+    nx.fillStyle='#cc0000'; nx.fillRect(0,0,128,26);
+    nx.fillStyle='#ffffff'; nx.font='bold 13px Arial'; nx.textAlign='center'; nx.textBaseline='middle';
+    nx.fillText('BLOCKBROWSER', 64, 13);
+    nx.fillStyle='#111'; nx.font='bold 17px Arial'; nx.fillText(def.name.toUpperCase(), 64, 46);
+    const nameTex = new THREE.CanvasTexture(nameC); nameTex.colorSpace=THREE.SRGBColorSpace;
+    const nameTag = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.07, 0.01),
+      new THREE.MeshStandardMaterial({map:nameTex}));
+    nameTag.position.set(0.08, 1.02, 0.12);
+    group.add(nameTag);
+    // Lanyard cord
+    const lanyardMat = new THREE.MeshStandardMaterial({color:0x1a1a1a});
+    const lanyard = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.18, 0.008), lanyardMat);
+    lanyard.position.set(0.08, 1.10, 0.12);
+    group.add(lanyard);
 
     group.position.set(def.startX, 0, def.startZ);
     scene.add(group);
 
     employees.push({
       group, def, name:def.name,
-      wanderDir: 1, wanderSpeed: 0.008,
       wanderTimer: 0,
-      targetZ: def.startZ,
+      targetZ: def.startZ + (Math.random()-0.5)*3,
+      pauseUntil: null,
     });
   }
 }
