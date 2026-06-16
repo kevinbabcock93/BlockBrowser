@@ -584,24 +584,29 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
     maxZ: Math.max(...corners.map(c=>c.wz)) + 0.05,
   });
 
-  // ── Place boxes ──
-  // Boxes sit at z=0 so poster face (+Z) is flush with shelf front
-  // Back panel is at z=-shelfDepth so it's behind the boxes
+  // Determine box rotation so poster always faces the aisle
+  // rotY=0 → no flip, rotY=PI → flip, rotY=-PI/2 → flip (back wall faces south)
+  const needsFlip = Math.abs(Math.cos(rotY)) < 0.1  // near ±PI/2
+    ? Math.sin(rotY) < 0                              // -PI/2 needs flip
+    : Math.cos(rotY) < 0;                             // PI needs flip
+  const boxRotY = needsFlip ? Math.PI : 0;
+
   const startOffset = (shelfSeed * 13) % pool.length;
   let placed = 0;
 
   for(let row=0; row<ROWS_PER_UNIT; row++){
-    const displayRow = ROWS_PER_UNIT - 1 - row; // fill top-down
+    const displayRow = ROWS_PER_UNIT - 1 - row;
     for(let col=0; col<boxCount; col++){
       const idx = (startOffset + row * boxCount + col) % pool.length;
       const movie = pool[idx];
       if(!movie) continue;
       const box = createVHSBox(movie);
       if(!box) continue;
+      box.rotation.y = boxRotY;
       box.position.set(
         startX + col * BOX_ALONG_SHELF,
         displayRow * ROW_SPACING + VHS_H/2 + 0.018,
-        0 // poster face at shelf front
+        0
       );
       box.userData.shelfPos   = box.position.clone();
       box.userData.shelfGroup = group;
