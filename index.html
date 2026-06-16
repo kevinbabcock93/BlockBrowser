@@ -1361,7 +1361,7 @@ function updateEmployees(dt){
     emp.wanderTimer += dt;
     const dz = emp.targetZ - emp.group.position.z;
     if(Math.abs(dz) < 0.05){
-      // Pause briefly then pick a new target
+      // Pause then pick new target
       if(!emp.pauseUntil) emp.pauseUntil = emp.wanderTimer + 1500 + Math.random()*2000;
       if(emp.wanderTimer > emp.pauseUntil){
         const [minZ, maxZ] = emp.def.wanderZ;
@@ -1370,10 +1370,23 @@ function updateEmployees(dt){
       }
     } else {
       const step = Math.sign(dz) * emp.def.wanderSpeed * dtSec;
-      emp.group.position.z += step;
-      emp.group.rotation.y = dz > 0 ? Math.PI : 0;
-      // Gentle walking bob
-      emp.group.position.y = Math.sin(emp.wanderTimer * 0.006) * 0.015;
+      const nextZ = emp.group.position.z + step;
+      // Check colliders before moving
+      const blocked = colliders.some(c =>
+        emp.group.position.x > c.minX && emp.group.position.x < c.maxX &&
+        nextZ > c.minZ && nextZ < c.maxZ
+      );
+      if(blocked){
+        // Pick a new target on the other side
+        const [minZ, maxZ] = emp.def.wanderZ;
+        emp.targetZ = dz > 0 ? minZ : maxZ;
+      } else {
+        emp.group.position.z = nextZ;
+        // Face the direction of travel: dz > 0 means moving south (+Z) → face south
+        emp.group.rotation.y = dz > 0 ? 0 : Math.PI;
+        // Walking bob
+        emp.group.position.y = Math.sin(emp.wanderTimer * 0.006) * 0.015;
+      }
     }
   }
 }
