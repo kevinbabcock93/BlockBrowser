@@ -590,10 +590,9 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
     maxZ: Math.max(...corners.map(c=>c.wz)) + 0.05,
   });
 
-  // No box rotation needed — the shelf group's rotY already orients everything correctly.
-  // A box with rotY=0 inside a group with rotY=PI will face world -Z (correct for east wall).
-  // A box with rotY=0 inside a group with rotY=0 will face world +Z (correct for west wall).
-  const boxRotY = 0;
+  // For rotY=PI shelves: group is flipped so box's +Z faces away from player.
+  // Rotate box 180° so poster faces the aisle.
+  const boxRotY = cosRot < -0.5 ? Math.PI : 0;
 
   const startOffset = (shelfSeed * 13) % pool.length;
   let placed = 0;
@@ -754,7 +753,7 @@ document.addEventListener('keydown', e=>{
 });
 document.addEventListener('keyup', e=>keys[e.key.toLowerCase()]=false);
 
-const SPEED = 0.055;
+const SPEED = 0.18;
 const moveDir = new THREE.Vector3();
 
 function updateMovement() {
