@@ -529,7 +529,10 @@ const BACK_GEO  = new THREE.BoxGeometry(1, 1, 0.04);     // scaled per shelf
 const SIDE_GEO  = new THREE.BoxGeometry(0.025, 1, 0.17); // scaled per shelf
 const SIGN_GEO  = new THREE.BoxGeometry(1, 0.25, 0.04);  // scaled per shelf
 
+let shelfCounter = 0;
+
 function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
+  const shelfSeed = shelfCounter++;
   const group = new THREE.Group();
   // Raise shelf so middle rows are at eye height (1.65m)
   // Shelf height = ROWS_PER_UNIT * ROW_SPACING = 8 * 0.20 = 1.6m
@@ -539,14 +542,42 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
   scene.add(group);
 
   const pool = POOL[genreIdx];
-  if(!pool||!pool.length) return;
+  if(!pool || pool.length === 0) return;
 
-  // Use actual box area width for shelf (not full length) to avoid empty sides
-  const boxCount0  = Math.min(Math.floor(length / BOX_ALONG_SHELF), BOXES_PER_ROW);
-  const shelfWidth = boxCount0 * BOX_ALONG_SHELF;
+  // Each shelf gets a unique starting offset based on its position in build order
+  // This guarantees no shelf is ever empty regardless of other shelves' usage
+  const startOffset = (shelfSeed * 13) % pool.length;
+  let placed = 0;
+
+  // Place boxes — fill from TOP row down
+  const boxCount  = Math.min(Math.floor(length / BOX_ALONG_SHELF), BOXES_PER_ROW);
+  const totalBoxW = boxCount * BOX_ALONG_SHELF;
+  const startX    = -totalBoxW/2 + BOX_ALONG_SHELF/2;
+
+  for(let row=0; row<ROWS_PER_UNIT; row++){
+    const displayRow = ROWS_PER_UNIT - 1 - row;
+    for(let col=0; col<boxCount; col++){
+      const idx = (startOffset + row * boxCount + col) % pool.length;
+      const movie = pool[idx];
+      if(!movie) continue;
+      placed++;
+      const box = createVHSBox(movie);
+      if(!box) continue;
+      box.position.set(
+        startX + col*BOX_ALONG_SHELF,
+        displayRow * ROW_SPACING + VHS_H/2 + 0.018,
+        -VHS_D/2
+      );
+      box.userData.shelfPos   = box.position.clone();
+      box.userData.shelfGroup = group;
+      group.add(box);
+      allBoxes.push(box);
+    }
+  }
 
   const shelfDepth = VHS_W + 0.05;
   const shelfH     = ROWS_PER_UNIT * ROW_SPACING + 0.1;
+  const shelfWidth = Math.min(Math.floor(length / BOX_ALONG_SHELF), BOXES_PER_ROW) * BOX_ALONG_SHELF;
 
   // Back panel — matches box area width exactly
   const back = new THREE.Mesh(BACK_GEO, shelfBackMat);
@@ -582,35 +613,6 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
     maxZ: Math.max(...corners.map(c=>c.wz)) + 0.05,
   });
 
-  // Place boxes — fill from TOP row down, so empty rows are at the bottom
-  const boxCount  = Math.min(Math.floor(length / BOX_ALONG_SHELF), BOXES_PER_ROW);
-  const totalBoxW = boxCount * BOX_ALONG_SHELF;
-  const startX    = -totalBoxW/2 + BOX_ALONG_SHELF/2;
-  const startOffset = genrePoolOffset[genreIdx];
-  let placed = 0;
-
-  for(let row=0; row<ROWS_PER_UNIT; row++){
-    const displayRow = ROWS_PER_UNIT - 1 - row;
-    for(let col=0; col<boxCount; col++){
-      // Wrap around pool so shelf is never empty
-      const idx = (startOffset + row * boxCount + col) % pool.length;
-      const movie = pool[idx];
-      if(!movie) continue;
-      placed++;
-      const box = createVHSBox(movie);
-      box.position.set(
-        startX + col*BOX_ALONG_SHELF,
-        displayRow * ROW_SPACING + VHS_H/2 + 0.018,
-        -VHS_D/2
-      );
-      box.userData.shelfPos   = box.position.clone();
-      box.userData.shelfGroup = group;
-      group.add(box);
-      allBoxes.push(box);
-    }
-  }
-  // Advance offset by one row so next shelf of same genre starts differently
-  genrePoolOffset[genreIdx] = (startOffset + boxCount) % pool.length;
 }
 
 const isMobile = 'ontouchstart' in window;
