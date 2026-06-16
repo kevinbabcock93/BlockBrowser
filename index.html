@@ -584,12 +584,10 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
     maxZ: Math.max(...corners.map(c=>c.wz)) + 0.05,
   });
 
-  // Determine box rotation so poster always faces the aisle
-  // rotY=0 → no flip, rotY=PI → flip, rotY=-PI/2 → flip (back wall faces south)
-  const needsFlip = Math.abs(Math.cos(rotY)) < 0.1  // near ±PI/2
-    ? Math.sin(rotY) < 0                              // -PI/2 needs flip
-    : Math.cos(rotY) < 0;                             // PI needs flip
-  const boxRotY = needsFlip ? Math.PI : 0;
+  // No box rotation needed — the shelf group's rotY already orients everything correctly.
+  // A box with rotY=0 inside a group with rotY=PI will face world -Z (correct for east wall).
+  // A box with rotY=0 inside a group with rotY=0 will face world +Z (correct for west wall).
+  const boxRotY = 0;
 
   const startOffset = (shelfSeed * 13) % pool.length;
   let placed = 0;
