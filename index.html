@@ -551,16 +551,22 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
   const startX     = -shelfWidth/2 + BOX_ALONG_SHELF/2;
 
   // ── Shelf back panel ──
+  // For rotY=PI shelves, local -Z becomes world +Z, putting the back panel IN FRONT of boxes.
+  // Fix: flip back panel Z for rotated shelves so it's always behind boxes in world space.
+  const cosRot = Math.cos(rotY);
+  const backZ   = cosRot < -0.5 ? shelfDepth : -shelfDepth;
+  const plankZ  = backZ / 2;
+
   const back = new THREE.Mesh(BACK_GEO, shelfBackMat);
   back.scale.set(shelfWidth, shelfH, 1);
-  back.position.set(0, shelfH/2, -shelfDepth);
+  back.position.set(0, shelfH/2, backZ);
   group.add(back);
 
   // ── Shelf planks ──
   for(let r=0; r<=ROWS_PER_UNIT; r++){
     const plank = new THREE.Mesh(PLANK_GEO, shelfMat);
     plank.scale.set(shelfWidth, 1, shelfDepth/0.17);
-    plank.position.set(0, r*ROW_SPACING, -shelfDepth/2);
+    plank.position.set(0, r*ROW_SPACING, plankZ);
     group.add(plank);
   }
 
