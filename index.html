@@ -1046,9 +1046,9 @@ const employees = [];
 let talkingTo = null;
 
 const EMPLOYEE_DEFS = [
-  {name:'Alex',   color:0x4466cc, startX: 3, startZ:-8,  wanderZ:[-5,-14]},
-  {name:'Jamie',  color:0xcc6644, startX:-3, startZ:-18, wanderZ:[-14,-25]},
-  {name:'Morgan', color:0x44aa66, startX: 2, startZ:-28, wanderZ:[-22,-32]},
+  {name:'Alex',   color:0x4466cc, startX: 3, startZ:-8,  wanderZ:[-5,-14],  wanderSpeed:0.8},
+  {name:'Jamie',  color:0xcc6644, startX:-3, startZ:-18, wanderZ:[-14,-25], wanderSpeed:0.7},
+  {name:'Morgan', color:0x44aa66, startX: 2, startZ:-28, wanderZ:[-22,-32], wanderSpeed:0.75},
 ];
 
 function buildEmployees(){
@@ -1120,7 +1120,7 @@ function updateEmployees(dt){
       const [minZ, maxZ] = emp.def.wanderZ;
       emp.targetZ = minZ + Math.random()*(maxZ-minZ);
     } else {
-      const step = Math.sign(dz) * emp.wanderSpeed * dt * 60;
+      const step = Math.sign(dz) * emp.wanderSpeed * (dt / 1000);
       emp.group.position.z += step;
       emp.group.rotation.y = dz > 0 ? Math.PI : 0;
     }
@@ -1284,15 +1284,12 @@ function checkEmployeeProximity(){
     const dist = Math.sqrt(dx*dx+dz*dz);
     if(dist < nearestDist){ nearestDist=dist; nearest=emp; }
   }
+  window._nearestEmp = nearest;
+  // Update hint separately — only if no box is being hovered
   const hintEl = document.getElementById('hint');
-  if(nearest){
+  if(hintEl && nearest && !hitMovie){
     hintEl.textContent = `[ E ] TALK TO ${nearest.name.toUpperCase()}`;
     hintEl.classList.add('show');
-    document.getElementById('xhair').classList.add('dim');
-    // Store nearest employee for E key
-    window._nearestEmp = nearest;
-  } else {
-    window._nearestEmp = null;
   }
 }
 const labelEl = document.getElementById('section-label');
