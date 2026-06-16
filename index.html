@@ -753,17 +753,20 @@ document.addEventListener('keydown', e=>{
 });
 document.addEventListener('keyup', e=>keys[e.key.toLowerCase()]=false);
 
-const SPEED = 0.18;
+const SPEED_DESKTOP = 0.22;
+const SPEED_MOBILE  = 0.18;
 const moveDir = new THREE.Vector3();
+const fwdVec  = new THREE.Vector3();
+const rgtVec  = new THREE.Vector3();
 
 function updateMovement() {
   if(isMobile){
     if(joyOn && (Math.abs(joyX)>0.05 || Math.abs(joyY)>0.05)){
-      const forward = new THREE.Vector3(-Math.sin(camera.rotation.y), 0, -Math.cos(camera.rotation.y));
-      const right   = new THREE.Vector3( Math.cos(camera.rotation.y), 0, -Math.sin(camera.rotation.y));
+      const sy = Math.sin(camera.rotation.y);
+      const cy = Math.cos(camera.rotation.y);
       tryMove(
-        (forward.x * (-joyY) + right.x * joyX) * SPEED * 1.2,
-        (forward.z * (-joyY) + right.z * joyX) * SPEED * 1.2
+        (-sy * (-joyY) + cy * joyX) * SPEED_MOBILE,
+        (-cy * (-joyY) - sy * joyX) * SPEED_MOBILE
       );
     }
     camera.position.y = 1.65;
@@ -776,12 +779,12 @@ function updateMovement() {
   if(keys['a']||keys['arrowleft'])  moveDir.x -= 1;
   if(keys['d']||keys['arrowright']) moveDir.x += 1;
   if(moveDir.length()>0){
-    moveDir.normalize().multiplyScalar(SPEED);
-    const fwd = new THREE.Vector3(-Math.sin(camera.rotation.y), 0, -Math.cos(camera.rotation.y));
-    const rgt = new THREE.Vector3( Math.cos(camera.rotation.y), 0, -Math.sin(camera.rotation.y));
+    moveDir.normalize().multiplyScalar(SPEED_DESKTOP);
+    const sy = Math.sin(camera.rotation.y);
+    const cy = Math.cos(camera.rotation.y);
     tryMove(
-      (fwd.x * (-moveDir.z) + rgt.x * moveDir.x),
-      (fwd.z * (-moveDir.z) + rgt.z * moveDir.x)
+      (-sy * (-moveDir.z) + cy * moveDir.x),
+      (-cy * (-moveDir.z) - sy * moveDir.x)
     );
   }
   const p = controls.getObject().position;
@@ -1483,13 +1486,7 @@ async function init(){
     document.getElementById('ld-re').style.display='block';
     return;
   }
-  st.textContent=`Ready! (${allBoxes.length} boxes placed)`;
-  // Show box count briefly in HUD
-  const countEl = document.createElement('div');
-  countEl.style.cssText='position:fixed;top:100px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);color:#0f0;font-family:monospace;font-size:14px;padding:6px 12px;border-radius:4px;z-index:999;';
-  countEl.textContent = `${allBoxes.length} boxes in scene`;
-  document.body.appendChild(countEl);
-  setTimeout(()=>countEl.remove(), 8000);
+  st.textContent='Ready!';
   await new Promise(r=>setTimeout(r,300));
   document.getElementById('loading').classList.add('out');
   setTimeout(()=>document.getElementById('loading').style.display='none',600);
