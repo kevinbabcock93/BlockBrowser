@@ -421,20 +421,24 @@ function createInspectBox(movie) {
     color: new THREE.Color(`hsl(${movie.hue},40%,20%)`),
     roughness:0.12, metalness:0.0
   });
+  // Load larger poster image
   if(movie.posterSm){
-    texLoader.load(movie.posterSm, tex=>{
+    const url = movie.posterSm.replace('/w154/','/w342/');
+    texLoader.load(url, tex=>{
       tex.colorSpace=THREE.SRGBColorSpace;
       posterMat.map=tex; posterMat.color.set(0xffffff);
       posterMat.needsUpdate=true;
     });
   }
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(VHS_D,VHS_H,VHS_W), [
-    new THREE.MeshStandardMaterial({color:0xe0d8cc, roughness:0.25}),
-    spineMat,
-    new THREE.MeshStandardMaterial({color:0xd8d0c4, roughness:0.2, metalness:0.02}),
-    new THREE.MeshStandardMaterial({color:0xb8b0a4, roughness:0.4}),
-    posterMat,
-    new THREE.MeshStandardMaterial({color:0x0a0a14, roughness:0.3}),
+  // Same geometry as shelf box: BoxGeometry(VHS_W, VHS_H, VHS_D)
+  // Face order: +x(right), -x(spine), +y(top), -y(bottom), +z(POSTER), -z(back)
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(VHS_W, VHS_H, VHS_D), [
+    new THREE.MeshStandardMaterial({color:0xe0d8cc, roughness:0.25}), // +x right edge
+    spineMat,                                                            // -x spine
+    new THREE.MeshStandardMaterial({color:0xd8d0c4, roughness:0.2, metalness:0.02}), // +y top
+    new THREE.MeshStandardMaterial({color:0xb8b0a4, roughness:0.4}),   // -y bottom
+    posterMat,                                                           // +z POSTER ← faces camera
+    new THREE.MeshStandardMaterial({color:0x0a0a14, roughness:0.3}),   // -z back
   ]);
   mesh.userData.movie = movie;
   const group = new THREE.Group();
@@ -724,12 +728,15 @@ if(isMobile){
     lookLastX=e.touches[0].clientX;lookLastY=e.touches[0].clientY;
   },{passive:false});
 
-  // Tap on a box to pick it up (tap right side near center)
-  lZ.addEventListener('touchend',e=>{
-    if(inspectOpen)return;
-    // Raycast from screen center on tap
+  // Tap right side to pick up box
+  lZ.addEventListener('touchend', e=>{
+    if(inspectOpen || talkingTo) return;
+    if(lookOn) return; // was a look drag, not a tap
+    // Force fresh raycast from screen center
+    camera.updateMatrixWorld();
     checkHover();
     if(hoveredBox) openInspect(hoveredBox);
+    e.preventDefault();
   },{passive:false});
 }
 
@@ -804,25 +811,29 @@ let currentMovie = null;
 
 function checkHover() {
   raycaster.setFromCamera(center, camera);
-  // Only cast against VHS meshes
   const meshes = allBoxes.map(b=>b.children[0]).filter(Boolean);
   const hits = raycaster.intersectObjects(meshes);
-  if(hits.length>0 && hits[0].distance<2.2){
+  const maxDist = isMobile ? 3.5 : 2.8;
+  if(hits.length>0 && hits[0].distance<maxDist){
     const box = hits[0].object.parent;
     if(box!==hoveredBox){
       hoveredBox=box;
-      document.getElementById('hint').classList.add('show');
+      document.getElementById('hint')?.classList.add('show');
     }
   } else {
     hoveredBox=null;
-    document.getElementById('hint').classList.remove('show');
+    document.getElementById('hint')?.classList.remove('show');
   }
 }
 
+// Desktop: click to pick up
 renderer.domElement.addEventListener('click', ()=>{
   if(inspectOpen) return;
+  if(isMobile) return; // mobile handled by touch
   if(hoveredBox&&controls.isLocked){
     openInspect(hoveredBox);
+  } else if(!controls.isLocked){
+    controls.lock();
   }
 });
 
@@ -871,6 +882,7 @@ function openInspect(boxGroup) {
 
   // Clone the box mesh into the inspect scene
   if(inspectBox){ iScene.remove(inspectBox); inspectBox=null; }
+  rotX=0.15; rotY2=0; // reset so poster faces camera
   inspectBox = createInspectBox(movie);
   inspectBox.position.set(0,0,0);
   inspectBox.rotation.set(0,0,0);
@@ -905,7 +917,7 @@ function resizeInspect() {
 
 // ── Inspect drag to rotate ──
 let isDragging=false, lastX=0, lastY=0;
-let rotX=0.1, rotY2=Math.PI; // start showing poster face (+z is spine, -z is poster, so rotate 180° to show poster)
+let rotX=0.15, rotY2=0; // poster (+z face) faces camera at rotY=0
 
 inspectCanvas.addEventListener('mousedown', e=>{isDragging=true;lastX=e.clientX;lastY=e.clientY;});
 window.addEventListener('mouseup', ()=>isDragging=false);
