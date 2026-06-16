@@ -447,9 +447,10 @@ function updateNearbyPosters() {
 // - 3 freestanding aisle shelf units
 // - Each shelf unit: 6 rows of boxes, 20 boxes per row
 
-const ROWS_PER_UNIT = 5;  // 5 rows × ~30 boxes = 150 slots, fits in 160 movie pool
+const ROWS_PER_UNIT = 7;   // 7 rows — taller shelf
 const BOXES_PER_ROW = 30;
-const ROW_SPACING   = VHS_H + 0.012;
+// Vertical spacing = VHS_H + twice the side gap (VHS_D*2)
+const ROW_SPACING   = VHS_H + VHS_D * 2;
 const BOX_SPACING   = VHS_D + 0.003;
 // Face-out: poster (+z face) faces the player
 // Box depth (VHS_D=0.028m) runs along shelf length
@@ -539,14 +540,6 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
     group.add(plank);
   }
 
-  // Side panels
-  for(const sx of [-length/2-0.01, length/2+0.01]){
-    const side = new THREE.Mesh(SIDE_GEO, shelfMat);
-    side.scale.set(1, shelfH/0.17, shelfDepth/0.17);
-    side.position.set(sx, shelfH/2, -shelfDepth/2);
-    group.add(side);
-  }
-
   // Sign — uses pre-built material, no new canvas
   const sign = new THREE.Mesh(SIGN_GEO, signMats[genreIdx]);
   sign.scale.set(Math.min(length, 2.5), 1, 1);
@@ -592,8 +585,7 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
       allBoxes.push(box);
     }
   }
-  // Only advance offset by one full row worth so genres stay somewhat distinct
-  genrePoolOffset[genreIdx] = (startOffset + boxCount) % pool.length;
+  genrePoolOffset[genreIdx] += placed;
 }
 
 const isMobile = 'ontouchstart' in window;
@@ -601,8 +593,8 @@ const isMobile = 'ontouchstart' in window;
 // ── Place all shelf units ──
 async function buildStore() {
   const st = document.getElementById('ld-st');
-  const wallLen  = isMobile ? 4 : 7;
-  const aisleLen = isMobile ? 3 : 6;
+  const wallLen  = isMobile ? 5 : 8;
+  const aisleLen = isMobile ? 4 : 7;
 
   const units = [
     [ 8.5, -2,  Math.PI, 0, 'NEW RELEASES', wallLen],
