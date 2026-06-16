@@ -159,6 +159,20 @@
 }
 </script>
 <script type="module">
+window.addEventListener('error', e=>{
+  const d=document.createElement('div');
+  d.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.95);color:#f55;font-family:monospace;font-size:13px;padding:20px;border:1px solid #f55;border-radius:6px;z-index:9999;max-width:80vw;';
+  d.textContent='JS ERROR: '+e.message+' (line '+e.lineno+')';
+  document.body.appendChild(d);
+});
+window.addEventListener('unhandledrejection', e=>{
+  const d=document.createElement('div');
+  d.style.cssText='position:fixed;top:60%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.95);color:#fa0;font-family:monospace;font-size:13px;padding:20px;border:1px solid #fa0;border-radius:6px;z-index:9999;max-width:80vw;';
+  d.textContent='PROMISE ERROR: '+e.reason;
+  document.body.appendChild(d);
+});
+</script>
+<script type="module">
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
@@ -223,7 +237,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
+renderer.toneMappingExposure = 0.85;
 document.getElementById('shelf-view').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -234,12 +248,16 @@ const camera = new THREE.PerspectiveCamera(70, W/H, 0.01, 50);
 camera.position.set(0, 1.65, 4); // eye height 1.65m, near south entrance
 
 // ── Lighting ──
-const ambient = new THREE.AmbientLight(0xfff5e0, 1.8); // much brighter ambient
+const ambient = new THREE.AmbientLight(0xfff5e0, 4.0); // very bright ambient
 scene.add(ambient);
+
+// Hemisphere light for overall fill
+const hemi = new THREE.HemisphereLight(0xffeedd, 0x334466, 2.0);
+scene.add(hemi);
 
 // Main overhead fluorescent lights — lower Y to be closer to shelf level
 function addLight(x, y, z) {
-  const light = new THREE.PointLight(0xfff8e8, 2.5, 10);
+  const light = new THREE.PointLight(0xfff8e8, 4.0, 14);
   light.position.set(x, y, z);
   scene.add(light);
   const fix = new THREE.Mesh(
