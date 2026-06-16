@@ -586,15 +586,14 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
   const boxCount  = Math.min(Math.floor(length / BOX_ALONG_SHELF), BOXES_PER_ROW);
   const totalBoxW = boxCount * BOX_ALONG_SHELF;
   const startX    = -totalBoxW/2 + BOX_ALONG_SHELF/2;
-  const startOffset = genrePoolOffset[genreIdx] % pool.length;
+  const startOffset = genrePoolOffset[genreIdx];
   let placed = 0;
 
   for(let row=0; row<ROWS_PER_UNIT; row++){
-    // Invert row so row 0 fills at top, empty rows fall to bottom
     const displayRow = ROWS_PER_UNIT - 1 - row;
     for(let col=0; col<boxCount; col++){
-      const idx = startOffset + (row * boxCount + col);
-      if(idx >= pool.length) break;
+      // Wrap around pool so shelf is never empty
+      const idx = (startOffset + row * boxCount + col) % pool.length;
       const movie = pool[idx];
       if(!movie) continue;
       placed++;
@@ -610,7 +609,8 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
       allBoxes.push(box);
     }
   }
-  genrePoolOffset[genreIdx] += placed;
+  // Advance offset by one row so next shelf of same genre starts differently
+  genrePoolOffset[genreIdx] = (startOffset + boxCount) % pool.length;
 }
 
 const isMobile = 'ontouchstart' in window;
