@@ -190,7 +190,7 @@ async function fetchGenre(g, idx) {
     ? `${TMDB_BASE}/movie/now_playing?api_key=${TMDB_KEY}&page=${p}`
     : `${TMDB_BASE}/movie/popular?api_key=${TMDB_KEY}&page=${p}`;
   // Fetch 4 pages = up to ~80 unique movies per genre
-  const responses = await Promise.all([1,2,3,4].map(p=>
+  const responses = await Promise.all([1,2,3,4,5,6,7,8].map(p=>
     fetch(u(p)).then(r=>r.ok?r.json():null).catch(()=>null)
   ));
   const seen = new Set();
@@ -447,14 +447,14 @@ function updateNearbyPosters() {
 // - 3 freestanding aisle shelf units
 // - Each shelf unit: 6 rows of boxes, 20 boxes per row
 
-const ROWS_PER_UNIT = 10; // floor to near ceiling at ~2m tall
-const BOXES_PER_ROW = 35;
-const ROW_SPACING   = VHS_H + 0.008;
+const ROWS_PER_UNIT = 5;  // 5 rows × ~30 boxes = 150 slots, fits in 160 movie pool
+const BOXES_PER_ROW = 30;
+const ROW_SPACING   = VHS_H + 0.012;
 const BOX_SPACING   = VHS_D + 0.003;
 // Face-out: poster (+z face) faces the player
 // Box depth (VHS_D=0.028m) runs along shelf length
 // Box width (VHS_W=0.104m) goes back into shelf
-const BOX_ALONG_SHELF = VHS_W + 0.004; // 0.108m per slot — box width + tiny gap
+const BOX_ALONG_SHELF = VHS_W + VHS_D; // box width + spine-width gap between each
 
 // Shelf plank material
 const shelfMat = new THREE.MeshStandardMaterial({color:0x3a2208, roughness:0.8, metalness:0.05});
@@ -576,7 +576,7 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
   for(let row=0; row<ROWS_PER_UNIT; row++){
     for(let col=0; col<boxCount; col++){
       const idx = startOffset + (row * boxCount + col);
-      if(idx >= pool.length) break; // stop — no more unique movies
+      if(idx >= pool.length) break;
       const movie = pool[idx];
       if(!movie) continue;
       placed++;
