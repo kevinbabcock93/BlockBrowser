@@ -1109,25 +1109,6 @@ function buildEmployees(){
   }
 }
 
-function updateEmployees(dt){
-  if(talkingTo) return;
-  for(const emp of employees){
-    emp.wanderTimer += dt;
-    // Walk toward target Z
-    const dz = emp.targetZ - emp.group.position.z;
-    if(Math.abs(dz) < 0.1){
-      // Pick new target
-      const [minZ, maxZ] = emp.def.wanderZ;
-      emp.targetZ = minZ + Math.random()*(maxZ-minZ);
-    } else {
-      const step = Math.sign(dz) * emp.wanderSpeed * (dt / 1000);
-      emp.group.position.z += step;
-      emp.group.rotation.y = dz > 0 ? Math.PI : 0;
-    }
-    // Bob up and down slightly while walking
-    emp.group.position.y = Math.sin(emp.wanderTimer*0.003)*0.02;
-  }
-}
 
 // ═══════════════════════════════════════════════
 // EMPLOYEE INTERACTION & SEARCH
@@ -1285,11 +1266,34 @@ function checkEmployeeProximity(){
     if(dist < nearestDist){ nearestDist=dist; nearest=emp; }
   }
   window._nearestEmp = nearest;
-  // Update hint separately — only if no box is being hovered
   const hintEl = document.getElementById('hint');
-  if(hintEl && nearest && !hitMovie){
+  if(hintEl && nearest){
     hintEl.textContent = `[ E ] TALK TO ${nearest.name.toUpperCase()}`;
     hintEl.classList.add('show');
+  }
+}
+
+function updateEmployees(dt){
+  if(talkingTo) return;
+  const dtSec = dt / 1000;
+  for(const emp of employees){
+    emp.wanderTimer += dt;
+    const dz = emp.targetZ - emp.group.position.z;
+    if(Math.abs(dz) < 0.05){
+      // Pause briefly then pick a new target
+      if(!emp.pauseUntil) emp.pauseUntil = emp.wanderTimer + 1500 + Math.random()*2000;
+      if(emp.wanderTimer > emp.pauseUntil){
+        const [minZ, maxZ] = emp.def.wanderZ;
+        emp.targetZ = minZ + Math.random()*(maxZ-minZ);
+        emp.pauseUntil = null;
+      }
+    } else {
+      const step = Math.sign(dz) * emp.def.wanderSpeed * dtSec;
+      emp.group.position.z += step;
+      emp.group.rotation.y = dz > 0 ? Math.PI : 0;
+      // Gentle walking bob
+      emp.group.position.y = Math.sin(emp.wanderTimer * 0.006) * 0.015;
+    }
   }
 }
 const labelEl = document.getElementById('section-label');
