@@ -159,20 +159,6 @@
 }
 </script>
 <script type="module">
-window.addEventListener('error', e=>{
-  const d=document.createElement('div');
-  d.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.95);color:#f55;font-family:monospace;font-size:13px;padding:20px;border:1px solid #f55;border-radius:6px;z-index:9999;max-width:80vw;';
-  d.textContent='JS ERROR: '+e.message+' (line '+e.lineno+')';
-  document.body.appendChild(d);
-});
-window.addEventListener('unhandledrejection', e=>{
-  const d=document.createElement('div');
-  d.style.cssText='position:fixed;top:60%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.95);color:#fa0;font-family:monospace;font-size:13px;padding:20px;border:1px solid #fa0;border-radius:6px;z-index:9999;max-width:80vw;';
-  d.textContent='PROMISE ERROR: '+e.reason;
-  document.body.appendChild(d);
-});
-</script>
-<script type="module">
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
@@ -804,24 +790,35 @@ function updateMovement() {
 // ═══════════════════════════════════════════════
 const raycaster = new THREE.Raycaster();
 const center = new THREE.Vector2(0,0);
+const _tmpVec = new THREE.Vector3();
 let hoveredBox = null;
 let inspectOpen = false;
 let currentMovie = null;
 
 function checkHover() {
-  raycaster.setFromCamera(center, camera);
-  const meshes = allBoxes.map(b=>b.children[0]).filter(Boolean);
-  const hits = raycaster.intersectObjects(meshes);
-  const maxDist = isMobile ? 3.5 : 2.8;
-  if(hits.length>0 && hits[0].distance<maxDist){
-    const box = hits[0].object.parent;
-    if(box!==hoveredBox){
-      hoveredBox=box;
-      document.getElementById('hint')?.classList.add('show');
+  try {
+    raycaster.setFromCamera(center, camera);
+    // Only check boxes within reasonable distance for performance
+    const pos = camera.position;
+    const nearby = allBoxes.filter(b=>{
+      const wp = b.getWorldPosition(_tmpVec);
+      return wp.distanceTo(pos) < 5;
+    });
+    const meshes = nearby.map(b=>b.children[0]).filter(Boolean);
+    const maxDist = isMobile ? 3.5 : 2.8;
+    if(meshes.length > 0){
+      const hits = raycaster.intersectObjects(meshes);
+      if(hits.length>0 && hits[0].distance<maxDist){
+        hoveredBox = hits[0].object.parent;
+        document.getElementById('hint')?.classList.add('show');
+        return;
+      }
     }
-  } else {
-    hoveredBox=null;
+    hoveredBox = null;
     document.getElementById('hint')?.classList.remove('show');
+  } catch(e) {
+    console.warn('checkHover error:', e);
+    hoveredBox = null;
   }
 }
 
