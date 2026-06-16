@@ -716,7 +716,15 @@ renderer.domElement.addEventListener('click', ()=>{
 const keys = {};
 document.addEventListener('keydown', e=>{
   keys[e.key.toLowerCase()]=true;
-  if(e.key==='Escape'&&inspectOpen) closeInspect();
+  if(e.key==='e'||e.key==='E'){
+    if(talkingTo){ window.closeEmpChat(); return; }
+    if(window._nearestEmp){ openEmpChat(window._nearestEmp); return; }
+    if(!inspectOpen) tryInteract();
+  }
+  if(e.key==='Escape'){
+    if(talkingTo){ window.closeEmpChat(); return; }
+    if(inspectOpen) closeInspect();
+  }
 });
 document.addEventListener('keyup', e=>keys[e.key.toLowerCase()]=false);
 
@@ -907,8 +915,368 @@ function resetAutoRotate(){
 }
 
 // ═══════════════════════════════════════════════
-// SECTION LABEL
+// WALL POSTERS — classic 80s/90s movies
 // ═══════════════════════════════════════════════
+const CLASSIC_IDS = [
+  603,   // The Matrix
+  857,   // Saving Private Ryan
+  539,   // Pulp Fiction
+  1891,  // The Empire Strikes Back
+  8587,  // The Lion King
+  769,   // Goodfellas
+  1370,  // Die Hard
+  11,    // Star Wars
+  289,   // Schindler's List
+  8467,  // Home Alone
+  1726,  // Iron Man
+  218,   // The Terminator
+];
+
+const wallPosterFrames = [];
+
+async function buildWallPosters() {
+  // Fetch classic movie posters from TMDB
+  const movies = await Promise.all(CLASSIC_IDS.map(id=>
+    fetch(`${TMDB_BASE}/movie/${id}?api_key=${TMDB_KEY}`)
+      .then(r=>r.ok?r.json():null).catch(()=>null)
+  ));
+
+  // Wall poster positions — on the east and west yellow walls
+  // between the shelf units (in the gaps between z=-2,-9,-16,-23)
+  const posterPositions = [
+    // East wall (x=9.85, facing west)
+    {wx:9.85, wy:1.4, wz:-5.5,  ry:-Math.PI/2},
+    {wx:9.85, wy:1.4, wz:-12.5, ry:-Math.PI/2},
+    {wx:9.85, wy:1.4, wz:-19.5, ry:-Math.PI/2},
+    {wx:9.85, wy:1.4, wz:-27,   ry:-Math.PI/2},
+    // West wall (x=-9.85, facing east)
+    {wx:-9.85, wy:1.4, wz:-5.5,  ry:Math.PI/2},
+    {wx:-9.85, wy:1.4, wz:-12.5, ry:Math.PI/2},
+    {wx:-9.85, wy:1.4, wz:-19.5, ry:Math.PI/2},
+    {wx:-9.85, wy:1.4, wz:-27,   ry:Math.PI/2},
+  ];
+
+  const validMovies = movies.filter(Boolean);
+
+  for(let i=0; i<posterPositions.length && i<validMovies.length; i++){
+    const m = validMovies[i];
+    const pos = posterPositions[i];
+    if(!m.poster_path) continue;
+
+    // Frame dimensions — big and bold, portrait VHS-like ratio
+    const frameW = 1.4, frameH = 2.1;
+
+    // Dark wooden frame
+    const frameMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(frameW+0.08, frameH+0.08, 0.04),
+      new THREE.MeshStandardMaterial({color:0x1a0e04, roughness:0.8})
+    );
+    frameMesh.position.set(pos.wx, pos.wy, pos.wz);
+    frameMesh.rotation.y = pos.ry;
+    scene.add(frameMesh);
+
+    // Poster face
+    const posterMat = new THREE.MeshStandardMaterial({
+      color:0x444444, roughness:0.15
+    });
+    const posterMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(frameW, frameH, 0.02),
+      posterMat
+    );
+    posterMesh.position.set(pos.wx, pos.wy, pos.wz);
+    posterMesh.rotation.y = pos.ry;
+    // Offset slightly in front of frame
+    posterMesh.position.x += Math.sin(pos.ry) * 0.03;
+    posterMesh.position.z += Math.cos(pos.ry) * 0.03;
+    scene.add(posterMesh);
+    wallPosterFrames.push(posterMesh);
+
+    // Load poster texture
+    const url = `https://image.tmdb.org/t/p/w342${m.poster_path}`;
+    texLoader.load(url, tex=>{
+      tex.colorSpace = THREE.SRGBColorSpace;
+      posterMat.map = tex;
+      posterMat.color.set(0xffffff);
+      posterMat.needsUpdate = true;
+    });
+
+    // Movie title below poster
+    const titleC = document.createElement('canvas'); titleC.width=256; titleC.height=48;
+    const tx = titleC.getContext('2d');
+    tx.fillStyle='#1a0e04'; tx.fillRect(0,0,256,48);
+    tx.fillStyle='#FFD700'; tx.font='bold 18px Arial Black,Arial';
+    tx.textAlign='center'; tx.textBaseline='middle';
+    tx.fillText(m.title.toUpperCase().slice(0,22), 128, 24);
+    const titleTex = new THREE.CanvasTexture(titleC);
+    titleTex.colorSpace = THREE.SRGBColorSpace;
+    const titleMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(frameW+0.08, 0.18, 0.02),
+      new THREE.MeshStandardMaterial({map:titleTex, roughness:0.5})
+    );
+    titleMesh.position.set(pos.wx, pos.wy - frameH/2 - 0.12, pos.wz);
+    titleMesh.rotation.y = pos.ry;
+    titleMesh.position.x += Math.sin(pos.ry)*0.03;
+    titleMesh.position.z += Math.cos(pos.ry)*0.03;
+    scene.add(titleMesh);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// EMPLOYEES — wandering store clerks
+// ═══════════════════════════════════════════════
+const employees = [];
+let talkingTo = null;
+
+const EMPLOYEE_DEFS = [
+  {name:'Alex',   color:0x4466cc, startX: 3, startZ:-8,  wanderZ:[-5,-14]},
+  {name:'Jamie',  color:0xcc6644, startX:-3, startZ:-18, wanderZ:[-14,-25]},
+  {name:'Morgan', color:0x44aa66, startX: 2, startZ:-28, wanderZ:[-22,-32]},
+];
+
+function buildEmployees(){
+  for(const def of EMPLOYEE_DEFS){
+    const group = new THREE.Group();
+
+    // Body
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(0.4, 0.7, 0.25),
+      new THREE.MeshStandardMaterial({color:def.color, roughness:0.7})
+    );
+    body.position.y = 0.95;
+    group.add(body);
+
+    // Head
+    const head = new THREE.Mesh(
+      new THREE.BoxGeometry(0.28, 0.28, 0.28),
+      new THREE.MeshStandardMaterial({color:0xf5d5b0, roughness:0.6})
+    );
+    head.position.y = 1.44;
+    group.add(head);
+
+    // Name tag
+    const nameC = document.createElement('canvas'); nameC.width=128; nameC.height=48;
+    const nx = nameC.getContext('2d');
+    nx.fillStyle='#ffffff'; nx.fillRect(0,0,128,48);
+    nx.fillStyle='#cc0000'; nx.font='bold 14px Arial'; nx.textAlign='center'; nx.textBaseline='middle';
+    nx.fillText('BLOCKBROWSER', 64, 14);
+    nx.fillStyle='#000'; nx.font='bold 18px Arial'; nx.fillText(def.name, 64, 34);
+    const nameTex = new THREE.CanvasTexture(nameC);
+    nameTex.colorSpace = THREE.SRGBColorSpace;
+    const nameTag = new THREE.Mesh(
+      new THREE.BoxGeometry(0.22, 0.08, 0.01),
+      new THREE.MeshStandardMaterial({map:nameTex})
+    );
+    nameTag.position.set(0, 0.88, 0.13);
+    group.add(nameTag);
+
+    // Legs
+    for(const lx of [-0.1, 0.1]){
+      const leg = new THREE.Mesh(
+        new THREE.BoxGeometry(0.14, 0.6, 0.18),
+        new THREE.MeshStandardMaterial({color:0x222244, roughness:0.8})
+      );
+      leg.position.set(lx, 0.3, 0);
+      group.add(leg);
+    }
+
+    group.position.set(def.startX, 0, def.startZ);
+    scene.add(group);
+
+    employees.push({
+      group, def, name:def.name,
+      wanderDir: 1, wanderSpeed: 0.008,
+      wanderTimer: 0,
+      targetZ: def.startZ,
+    });
+  }
+}
+
+function updateEmployees(dt){
+  if(talkingTo) return;
+  for(const emp of employees){
+    emp.wanderTimer += dt;
+    // Walk toward target Z
+    const dz = emp.targetZ - emp.group.position.z;
+    if(Math.abs(dz) < 0.1){
+      // Pick new target
+      const [minZ, maxZ] = emp.def.wanderZ;
+      emp.targetZ = minZ + Math.random()*(maxZ-minZ);
+    } else {
+      const step = Math.sign(dz) * emp.wanderSpeed * dt * 60;
+      emp.group.position.z += step;
+      emp.group.rotation.y = dz > 0 ? Math.PI : 0;
+    }
+    // Bob up and down slightly while walking
+    emp.group.position.y = Math.sin(emp.wanderTimer*0.003)*0.02;
+  }
+}
+
+// ═══════════════════════════════════════════════
+// EMPLOYEE INTERACTION & SEARCH
+// ═══════════════════════════════════════════════
+const GENRE_SHELF_LABELS = {
+  'NEW RELEASES': 'the New Releases shelf on the east wall',
+  'ACTION':       'the Action shelf on the east wall',
+  'COMEDY':       'the Comedy shelf on the east wall',
+  'HORROR':       'the Horror shelf on the east wall',
+  'DRAMA':        'the Drama shelf on the west wall',
+  'SCI-FI':       'the Sci-Fi shelf on the west wall',
+  'THRILLER':     'the Thriller shelf on the west wall',
+  'ANIMATION':    'the Animation shelf on the west wall',
+};
+
+function searchMovies(query){
+  const q = query.toLowerCase();
+  const results = [];
+  const seen = new Set();
+  for(const pool of POOL){
+    for(const m of pool){
+      if(seen.has(m.id)) continue;
+      const score =
+        (m.title.toLowerCase().includes(q) ? 3 : 0) +
+        (m.genre.toLowerCase().includes(q) ? 2 : 0) +
+        (m.desc.toLowerCase().includes(q)  ? 1 : 0);
+      if(score > 0){ results.push({m, score}); seen.add(m.id); }
+    }
+  }
+  results.sort((a,b)=>b.score-a.score);
+  return results.slice(0,5).map(r=>r.m);
+}
+
+function employeeResponse(empName, query){
+  const q = query.toLowerCase();
+
+  // Greeting / small talk
+  if(q.match(/^(hi|hello|hey|sup|what's up|howdy)/)){
+    return `Hey! I'm ${empName}. Looking for something to watch? Just ask me — I know every title in this store!`;
+  }
+
+  // Recommendation request
+  if(q.match(/recommend|suggestion|what should|good movie|best|popular/)){
+    const genres = Object.keys(GENRE_SHELF_LABELS);
+    const randomGenre = genres[Math.floor(Math.random()*genres.length)];
+    const pool = POOL.find(p=>p[0]?.genre===randomGenre) || POOL[0];
+    const pick = pool[Math.floor(Math.random()*Math.min(5,pool.length))];
+    if(pick) return `I'd recommend <b>${pick.title}</b> (${pick.year}, ★${pick.rating})! You'll find it on ${GENRE_SHELF_LABELS[pick.genre] || 'one of our shelves'}. Great choice!`;
+  }
+
+  // Search by title/genre/keyword
+  const matches = searchMovies(query);
+  if(matches.length === 0){
+    return `Hmm, I don't think we carry anything matching "<i>${query}</i>" right now. Try a different title or genre — we've got Action, Comedy, Horror, Drama, Sci-Fi, Thriller, and Animation!`;
+  }
+  if(matches.length === 1){
+    const m = matches[0];
+    return `Found it! <b>${m.title}</b> (${m.year}, ★${m.rating}) — head to ${GENRE_SHELF_LABELS[m.genre] || 'one of our shelves'}. ${m.desc.slice(0,80)}…`;
+  }
+  const list = matches.map(m=>`<b>${m.title}</b> (${m.year}, ★${m.rating})`).join('<br>');
+  return `Found ${matches.length} matches:<br>${list}<br><br>They're in the ${matches[0].genre} section — ${GENRE_SHELF_LABELS[matches[0].genre] || 'check the shelves'}!`;
+}
+
+// ── Employee chat UI (added to HTML dynamically) ──
+const empChatEl = document.createElement('div');
+empChatEl.id = 'emp-chat';
+empChatEl.style.cssText = `
+  position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+  width:min(500px,95vw);background:rgba(10,8,2,0.96);
+  border:2px solid #FFD700;border-bottom:none;border-radius:8px 8px 0 0;
+  padding:16px 16px 12px;z-index:80;display:none;
+  font-family:'Barlow',sans-serif;
+`;
+empChatEl.innerHTML = `
+  <div id="emp-header" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+    <div id="emp-avatar" style="width:36px;height:36px;border-radius:50%;background:#4466cc;display:flex;align-items:center;justify-content:center;font-size:18px;">👤</div>
+    <div>
+      <div id="emp-name" style="font-family:'Bebas Neue',cursive;font-size:18px;color:#FFD700;letter-spacing:2px;">EMPLOYEE</div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:1px;">BLOCKBROWSER STAFF</div>
+    </div>
+    <button onclick="closeEmpChat()" style="margin-left:auto;background:none;border:none;color:rgba(255,255,255,0.5);font-size:20px;cursor:pointer;">✕</button>
+  </div>
+  <div id="emp-messages" style="max-height:180px;overflow-y:auto;margin-bottom:10px;display:flex;flex-direction:column;gap:8px;"></div>
+  <div style="display:flex;gap:8px;">
+    <input id="emp-input" type="text" placeholder="Ask me anything — title, genre, mood..."
+      style="flex:1;background:rgba(255,255,255,0.08);border:1px solid rgba(255,215,0,0.3);
+      border-radius:4px;padding:8px 12px;color:#fff;font-size:13px;font-family:'Barlow',sans-serif;outline:none;"
+    >
+    <button onclick="sendEmpMessage()" style="background:#FFD700;color:#111;border:none;
+      font-family:'Bebas Neue',cursive;font-size:16px;letter-spacing:1px;padding:8px 16px;
+      border-radius:4px;cursor:pointer;">ASK</button>
+  </div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:8px;text-align:center;">
+    Try: "scary movies" · "action from the 90s" · "recommend something" · "Jurassic Park"
+  </div>
+`;
+document.body.appendChild(empChatEl);
+
+function addEmpMessage(text, fromPlayer=false){
+  const msgEl = document.getElementById('emp-messages');
+  const div = document.createElement('div');
+  div.style.cssText = `
+    padding:8px 12px;border-radius:6px;font-size:13px;max-width:85%;
+    ${fromPlayer
+      ? 'background:rgba(255,215,0,0.12);color:#FFD700;align-self:flex-end;text-align:right;'
+      : 'background:rgba(255,255,255,0.08);color:#fff;align-self:flex-start;'}
+  `;
+  div.innerHTML = text;
+  msgEl.appendChild(div);
+  msgEl.scrollTop = msgEl.scrollHeight;
+}
+
+function openEmpChat(emp){
+  talkingTo = emp;
+  controls.unlock();
+  document.getElementById('emp-name').textContent = emp.name.toUpperCase();
+  document.getElementById('emp-avatar').style.background = '#'+emp.def.color.toString(16).padStart(6,'0');
+  document.getElementById('emp-messages').innerHTML = '';
+  addEmpMessage(`Hey there! I'm ${emp.name}. What can I help you find today?`);
+  empChatEl.style.display = 'block';
+  setTimeout(()=>document.getElementById('emp-input').focus(), 100);
+}
+
+window.closeEmpChat = function(){
+  talkingTo = null;
+  empChatEl.style.display = 'none';
+};
+
+window.sendEmpMessage = function(){
+  const input = document.getElementById('emp-input');
+  const text = input.value.trim();
+  if(!text || !talkingTo) return;
+  input.value = '';
+  addEmpMessage(text, true);
+  setTimeout(()=>{
+    const response = employeeResponse(talkingTo.name, text);
+    addEmpMessage(response);
+  }, 400);
+};
+
+document.getElementById('emp-input')?.addEventListener('keydown', e=>{
+  if(e.key==='Enter') window.sendEmpMessage();
+  if(e.key==='Escape') window.closeEmpChat();
+});
+
+// Check if player is near an employee
+function checkEmployeeProximity(){
+  if(talkingTo) return;
+  const pos = camera.position;
+  let nearest = null, nearestDist = 2.2;
+  for(const emp of employees){
+    const dx = emp.group.position.x - pos.x;
+    const dz = emp.group.position.z - pos.z;
+    const dist = Math.sqrt(dx*dx+dz*dz);
+    if(dist < nearestDist){ nearestDist=dist; nearest=emp; }
+  }
+  const hintEl = document.getElementById('hint');
+  if(nearest){
+    hintEl.textContent = `[ E ] TALK TO ${nearest.name.toUpperCase()}`;
+    hintEl.classList.add('show');
+    document.getElementById('xhair').classList.add('dim');
+    // Store nearest employee for E key
+    window._nearestEmp = nearest;
+  } else {
+    window._nearestEmp = null;
+  }
+}
 const labelEl = document.getElementById('section-label');
 let lastLabel='',labelTimer=null;
 function updateLabel(){
@@ -930,12 +1298,18 @@ function updateLabel(){
 // ═══════════════════════════════════════════════
 // MAIN LOOP
 // ═══════════════════════════════════════════════
-let frameId;
+let lastTime = performance.now();
 function animate(){
   frameId=requestAnimationFrame(animate);
+  const now = performance.now();
+  const dt = now - lastTime; lastTime = now;
   updateMovement();
-  if(!inspectOpen) checkHover();
+  if(!inspectOpen && !talkingTo){
+    checkHover();
+    checkEmployeeProximity();
+  }
   if(!inspectOpen) updateNearbyPosters();
+  updateEmployees(dt);
   renderer.render(scene,camera);
 
   // Inspect view
@@ -980,6 +1354,8 @@ async function init(){
   st.textContent='Building store...';
   try {
     await buildStore();
+    await buildWallPosters();
+    buildEmployees();
   } catch(e) {
     st.textContent = 'CRASH: ' + e.message;
     console.error(e);
