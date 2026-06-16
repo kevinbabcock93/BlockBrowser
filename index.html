@@ -544,49 +544,19 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
   const pool = POOL[genreIdx];
   if(!pool || pool.length === 0) return;
 
-  // Each shelf gets a unique starting offset based on its position in build order
-  // This guarantees no shelf is ever empty regardless of other shelves' usage
-  const startOffset = (shelfSeed * 13) % pool.length;
-  // Box Z position: front poster face flush with shelf front (z=0 in local space)
-  const boxZ = 0;
-
-  // Place boxes — fill from TOP row down
-  const boxCount  = Math.min(Math.floor(length / BOX_ALONG_SHELF), BOXES_PER_ROW);
-  const totalBoxW = boxCount * BOX_ALONG_SHELF;
-  const startX    = -totalBoxW/2 + BOX_ALONG_SHELF/2;
-
-  for(let row=0; row<ROWS_PER_UNIT; row++){
-    const displayRow = ROWS_PER_UNIT - 1 - row;
-    for(let col=0; col<boxCount; col++){
-      const idx = (startOffset + row * boxCount + col) % pool.length;
-      const movie = pool[idx];
-      if(!movie) continue;
-      placed++;
-      const box = createVHSBox(movie);
-      if(!box) continue;
-      box.position.set(
-        startX + col*BOX_ALONG_SHELF,
-        displayRow * ROW_SPACING + VHS_H/2 + 0.018,
-        boxZ
-      );
-      box.userData.shelfPos   = box.position.clone();
-      box.userData.shelfGroup = group;
-      group.add(box);
-      allBoxes.push(box);
-    }
-  }
-
   const shelfDepth = VHS_W + 0.05;
   const shelfH     = ROWS_PER_UNIT * ROW_SPACING + 0.1;
-  const shelfWidth = Math.min(Math.floor(length / BOX_ALONG_SHELF), BOXES_PER_ROW) * BOX_ALONG_SHELF;
+  const boxCount   = Math.min(Math.floor(length / BOX_ALONG_SHELF), BOXES_PER_ROW);
+  const shelfWidth = boxCount * BOX_ALONG_SHELF;
+  const startX     = -shelfWidth/2 + BOX_ALONG_SHELF/2;
 
-  // Back panel sits BEHIND boxes (at -shelfDepth, away from player)
+  // ── Shelf back panel ──
   const back = new THREE.Mesh(BACK_GEO, shelfBackMat);
   back.scale.set(shelfWidth, shelfH, 1);
   back.position.set(0, shelfH/2, -shelfDepth);
   group.add(back);
 
-  // Shelf planks
+  // ── Shelf planks ──
   for(let r=0; r<=ROWS_PER_UNIT; r++){
     const plank = new THREE.Mesh(PLANK_GEO, shelfMat);
     plank.scale.set(shelfWidth, 1, shelfDepth/0.17);
@@ -594,13 +564,13 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
     group.add(plank);
   }
 
-  // Sign above shelf
+  // ── Genre sign ──
   const sign = new THREE.Mesh(SIGN_GEO, signMats[genreIdx]);
   sign.scale.set(Math.min(shelfWidth, 2.5), 1, 1);
   sign.position.set(0, shelfH + 0.18, 0);
   group.add(sign);
 
-  // Collision
+  // ── Collision ──
   const hw = shelfWidth/2 + 0.1, hd = shelfDepth + 0.1;
   const cos = Math.cos(rotY), sin = Math.sin(rotY);
   const corners = [[-hw,-hd],[-hw,0],[hw,-hd],[hw,0]].map(([lx,lz])=>({
@@ -614,6 +584,32 @@ function createShelfUnit(posX, posZ, rotY, genreIdx, label, length=4.0) {
     maxZ: Math.max(...corners.map(c=>c.wz)) + 0.05,
   });
 
+  // ── Place boxes ──
+  // Boxes sit at z=0 so poster face (+Z) is flush with shelf front
+  // Back panel is at z=-shelfDepth so it's behind the boxes
+  const startOffset = (shelfSeed * 13) % pool.length;
+  let placed = 0;
+
+  for(let row=0; row<ROWS_PER_UNIT; row++){
+    const displayRow = ROWS_PER_UNIT - 1 - row; // fill top-down
+    for(let col=0; col<boxCount; col++){
+      const idx = (startOffset + row * boxCount + col) % pool.length;
+      const movie = pool[idx];
+      if(!movie) continue;
+      const box = createVHSBox(movie);
+      if(!box) continue;
+      box.position.set(
+        startX + col * BOX_ALONG_SHELF,
+        displayRow * ROW_SPACING + VHS_H/2 + 0.018,
+        0 // poster face at shelf front
+      );
+      box.userData.shelfPos   = box.position.clone();
+      box.userData.shelfGroup = group;
+      group.add(box);
+      allBoxes.push(box);
+      placed++;
+    }
+  }
 }
 
 const isMobile = 'ontouchstart' in window;
