@@ -802,15 +802,19 @@ function checkHover() {
     const pos = camera.position;
     const nearby = allBoxes.filter(b=>{
       const wp = b.getWorldPosition(_tmpVec);
-      return wp.distanceTo(pos) < 5;
+      return wp.distanceTo(pos) < 6;
     });
     const meshes = nearby.map(b=>b.children[0]).filter(Boolean);
-    const maxDist = isMobile ? 3.5 : 2.8;
+    const maxDist = isMobile ? 4.5 : 2.8;
     if(meshes.length > 0){
       const hits = raycaster.intersectObjects(meshes);
       if(hits.length>0 && hits[0].distance<maxDist){
         hoveredBox = hits[0].object.parent;
-        document.getElementById('hint')?.classList.add('show');
+        const hEl = document.getElementById('hint');
+        if(hEl){
+          hEl.textContent = isMobile ? 'TAP TO PICK UP' : '[ CLICK ] PICK UP';
+          hEl.classList.add('show');
+        }
         return;
       }
     }
@@ -824,6 +828,8 @@ function checkHover() {
 
 function tryInteract() {
   if(inspectOpen || talkingTo) return;
+  // Employee takes priority if nearby
+  if(window._nearestEmp){ openEmpChat(window._nearestEmp); return; }
   camera.updateMatrixWorld();
   checkHover();
   if(hoveredBox) openInspect(hoveredBox);
@@ -1371,7 +1377,9 @@ function checkEmployeeProximity(){
   window._nearestEmp = nearest;
   const hintEl = document.getElementById('hint');
   if(hintEl && nearest){
-    hintEl.textContent = `[ E ] TALK TO ${nearest.name.toUpperCase()}`;
+    hintEl.textContent = isMobile
+      ? `TAP TO TALK TO ${nearest.name.toUpperCase()}`
+      : `[ E ] TALK TO ${nearest.name.toUpperCase()}`;
     hintEl.classList.add('show');
   }
 }
