@@ -718,13 +718,6 @@ if(isMobile){
   lZ.addEventListener('touchend',()=>{
     const wasDrag = lookDragged;
     lookOn=false; lookDragged=false;
-    // DEBUG: flash indicator so we can see if this fires at all
-    const dbg = document.createElement('div');
-    dbg.style.cssText='position:fixed;top:120px;left:50%;transform:translateX(-50%);background:lime;color:#000;font-family:monospace;font-size:14px;padding:6px 14px;border-radius:4px;z-index:9999;';
-    dbg.textContent = `TAP FIRED (drag=${wasDrag}) hoveredBox=${!!hoveredBox} nearEmp=${!!window._nearestEmp}`;
-    document.body.appendChild(dbg);
-    setTimeout(()=>dbg.remove(), 3000);
-    // Short tap (no drag) = pick up box
     if(!wasDrag && !inspectOpen && !talkingTo){
       tryInteract();
     }
@@ -834,10 +827,22 @@ function checkHover() {
 
 function tryInteract() {
   if(inspectOpen || talkingTo) return;
-  // Employee takes priority if nearby
   if(window._nearestEmp){ openEmpChat(window._nearestEmp); return; }
   camera.updateMatrixWorld();
   checkHover();
+  // DEBUG
+  const pos = camera.position;
+  let closestDist = Infinity;
+  for(const b of allBoxes){
+    const wp = b.getWorldPosition(new THREE.Vector3());
+    const d = wp.distanceTo(pos);
+    if(d < closestDist) closestDist = d;
+  }
+  const dbg = document.createElement('div');
+  dbg.style.cssText='position:fixed;top:150px;left:50%;transform:translateX(-50%);background:cyan;color:#000;font-family:monospace;font-size:13px;padding:8px 14px;border-radius:4px;z-index:9999;max-width:90vw;';
+  dbg.textContent = `closestBoxDist=${closestDist.toFixed(2)} camPos=(${pos.x.toFixed(1)},${pos.y.toFixed(1)},${pos.z.toFixed(1)}) totalBoxes=${allBoxes.length}`;
+  document.body.appendChild(dbg);
+  setTimeout(()=>dbg.remove(), 4000);
   if(hoveredBox) openInspect(hoveredBox);
 }
 
@@ -1340,7 +1345,7 @@ function openEmpChat(emp){
   talkingTo = emp;
   controls.unlock();
   document.getElementById('emp-name').textContent = emp.name.toUpperCase();
-  document.getElementById('emp-avatar').style.background = '#'+emp.def.color.toString(16).padStart(6,'0');
+  document.getElementById('emp-avatar').style.background = '#1a3a99';
   document.getElementById('emp-messages').innerHTML = '';
   addEmpMessage(`Hey there! I'm ${emp.name}. What can I help you find today?`);
   empChatEl.style.display = 'block';
