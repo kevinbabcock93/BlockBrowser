@@ -718,6 +718,12 @@ if(isMobile){
   lZ.addEventListener('touchend',()=>{
     const wasDrag = lookDragged;
     lookOn=false; lookDragged=false;
+    // DEBUG: flash indicator so we can see if this fires at all
+    const dbg = document.createElement('div');
+    dbg.style.cssText='position:fixed;top:120px;left:50%;transform:translateX(-50%);background:lime;color:#000;font-family:monospace;font-size:14px;padding:6px 14px;border-radius:4px;z-index:9999;';
+    dbg.textContent = `TAP FIRED (drag=${wasDrag}) hoveredBox=${!!hoveredBox} nearEmp=${!!window._nearestEmp}`;
+    document.body.appendChild(dbg);
+    setTimeout(()=>dbg.remove(), 3000);
     // Short tap (no drag) = pick up box
     if(!wasDrag && !inspectOpen && !talkingTo){
       tryInteract();
